@@ -4,11 +4,11 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# Custom CSS for NewGlobe Dashboard Style
+# Custom CSS for Dashboard Styling
 st.markdown("""
     <style>
     [data-testid="stMetricValue"] { font-size: 32px; font-weight: bold; }
-    [data-testid="stMetricDelta"] { font-size: 16px; }
+    .stAlert { margin-top: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -60,26 +60,14 @@ def generate_audit_data():
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
-        # Flagging Escalation Reasons
-        def get_reason(row):
-            reasons = []
-            if row['Number of EINK Tablet Assigned'] == 0: reasons.append("No assigned tablet")
-            if row['Number of EINK Tablet Assigned'] > 1: reasons.append("More tablets than allowed")
-            if row['Number of EINK Tablet Assigned'] > 0 and row['Count Unique Devices Logged In'] == 0: reasons.append("Assigned but not using")
-            if row['Matches SnipeIT?'] == "No": reasons.append("Using tablet assigned to others")
-            if row['Count Unique Devices Logged In'] > 1: reasons.append("Logging into multiple devices")
-            return " & ".join(reasons)
-
-        df['Escalation Reason'] = df.apply(get_reason, axis=1)
-
         summary_vals = {
             "Total Staff": len(active),
             "Total Assigned": snipe_counts['Number of EINK Tablet Assigned'].sum(),
-            "Staff without assigned tablet": len(df[df['Number of EINK Tablet Assigned'] == 0]),
-            "Staff assigned more tablets than allowed": len(df[df['Number of EINK Tablet Assigned'] > 1]),
-            "Staff assigned tablet but not using/log in it": len(df[(df['Number of EINK Tablet Assigned'] > 0) & (df['Count Unique Devices Logged In'] == 0)]),
-            "Staff using tablets assigned to others": len(df[df['Matches SnipeIT?'] == "No"]),
-            "Staff logging into multiple devices": len(df[df['Count Unique Devices Logged In'] > 1])
+            "No Tablet": df[df['Number of EINK Tablet Assigned'] == 0],
+            "More Than Allowed": df[df['Number of EINK Tablet Assigned'] > 1],
+            "Not Using": df[(df['Number of EINK Tablet Assigned'] > 0) & (df['Count Unique Devices Logged In'] == 0)],
+            "Assigned Others": df[df['Matches SnipeIT?'] == "No"],
+            "Multiple Devices": df[df['Count Unique Devices Logged In'] > 1]
         }
 
         return df, summary_vals
@@ -92,7 +80,6 @@ st.title("NewGlobe · JigawaUNITE")
 audit_df, summary = generate_audit_data()
 
 if audit_df is not None:
-    # Navigation Tabs
     tab_summary, tab_breakdown, tab_escalation = st.tabs(["📊 Summary", "📋 Breakdown", "🚨 Escalation Details"])
 
     # 1. SUMMARY TAB
@@ -103,34 +90,39 @@ if audit_df is not None:
         t2.metric("Total Number of Assigned Tablets", summary["Total Assigned"])
         st.write("---")
         m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Staff without assigned tablet", summary["Staff without assigned tablet"], f"{(summary['Staff without assigned tablet']/total_pop)*100:.1f}%")
-        m2.metric("Staff assigned more tablets than allowed", summary["Staff assigned more tablets than allowed"], f"{(summary['Staff assigned more tablets than allowed']/total_pop)*100:.1f}%")
-        m3.metric("Staff assigned tablet but not using/log in it", summary["Staff assigned tablet but not using/log in it"], f"{(summary['Staff assigned tablet but not using/log in it']/total_pop)*100:.1f}%")
-        m4.metric("Staff using tablets assigned to others", summary["Staff using tablets assigned to others"], f"{(summary['Staff using tablets assigned to others']/total_pop)*100:.1f}%")
-        m5.metric("Staff logging into multiple devices", summary["Staff logging into multiple devices"], f"{(summary['Staff logging into multiple devices']/total_pop)*100:.1f}%")
+        m1.metric("Staff without assigned tablet", len(summary["No Tablet"]), f"{(len(summary['No Tablet'])/total_pop)*100:.1f}%")
+        m2.metric("Staff assigned more tablets than allowed", len(summary["More Than Allowed"]), f"{(len(summary['More Than Allowed'])/total_pop)*100:.1f}%")
+        m3.metric("Staff assigned tablet but not using/log in it", len(summary["Not Using"]), f"{(len(summary['Not Using'])/total_pop)*100:.1f}%")
+        m4.metric("Staff using tablets assigned to others", len(summary["Assigned Others"]), f"{(len(summary['Assigned Others'])/total_pop)*100:.1f}%")
+        m5.metric("Staff logging into multiple devices", len(summary["Multiple Devices"]), f"{(len(summary['Multiple Devices'])/total_pop)*100:.1f}%")
 
     # 2. BREAKDOWN TAB
     with tab_breakdown:
-        st.subheader("Detailed Audit List")
         cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title', 'Tablet ID Assigned', 'Number of EINK Tablet Assigned', 'Tablet ID Used', 'Count Unique Devices Logged In', 'Matches SnipeIT?']
         st.dataframe(audit_df[cols], use_container_width=True, hide_index=True)
 
-    # 3. ESCALATION TAB
+    # 3. ESCALATION TAB (Segmented View)
     with tab_escalation:
-        st.subheader("🚨 Priority Escalation List")
+        st.header("🚨 Escalation Action Lists")
         
-        # Filter: Only show people who have at least one escalation reason
-        escalation_list = audit_df[audit_df['Escalation Reason'] != ""].copy()
-        
-        # We format this exactly like a task list
-        esc_cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title', 'Escalation Reason', 'Tablet ID Assigned', 'Tablet ID Used']
-        
-        if not escalation_list.empty:
-            st.warning(f"Found {len(escalation_list)} staff members requiring immediate follow-up.")
-            st.dataframe(escalation_list[esc_cols], use_container_width=True, hide_index=True)
-            
-            # Export Escalation Data
-            csv_esc = escalation_list[esc_cols].to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Escalation List", csv_esc, "Escalation_Details.csv", "text/csv")
-        else:
-            st.success("No escalation issues found! 100% Compliance.")
+        common_cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title']
+
+        # List 1
+        st.subheader("1. Staff without assigned tablet")
+        st.dataframe(summary["No Tablet"][common_cols], use_container_width=True, hide_index=True)
+
+        # List 2
+        st.subheader("2. Staff assigned more tablets than allowed")
+        st.dataframe(summary["More Than Allowed"][common_cols + ['Tablet ID Assigned', 'Number of EINK Tablet Assigned']], use_container_width=True, hide_index=True)
+
+        # List 3
+        st.subheader("3. Staff assigned tablet but not using/log in it")
+        st.dataframe(summary["Not Using"][common_cols + ['Tablet ID Assigned']], use_container_width=True, hide_index=True)
+
+        # List 4
+        st.subheader("4. Staff using tablets assigned to others")
+        st.dataframe(summary["Assigned Others"][common_cols + ['Tablet ID Assigned', 'Tablet ID Used']], use_container_width=True, hide_index=True)
+
+        # List 5
+        st.subheader("5. Staff logging into multiple devices")
+        st.dataframe(summary["Multiple Devices"][common_cols + ['Tablet ID Used', 'Count Unique Devices Logged In']], use_container_width=True, hide_index=True)
