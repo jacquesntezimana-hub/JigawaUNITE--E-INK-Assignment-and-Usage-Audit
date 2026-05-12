@@ -46,23 +46,24 @@ def generate_jigawa_audit():
             assigned = str(row.get('Tablet ID Assigned', '')).strip().lower()
             used = str(row.get('Tablet ID Used', '')).strip().lower()
             if assigned in ['nan', ''] or used in ['nan', '']: return "No Data"
-            a_set, u_set = set(assigned.split(',')), set(used.split(','))
+            a_set = set([s.strip() for s in assigned.split(',')])
+            u_set = set([s.strip() for s in used.split(',')])
             return "Yes" if a_set == u_set else ("Partial Match" if not a_set.isdisjoint(u_set) else "No")
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
         # 6. Calculations for Summary
         total_staff = len(active)
-        total_tablets = snipe_counts['Number of EINK Tablet Assigned'].sum()
+        total_assigned_tablets = snipe_counts['Number of EINK Tablet Assigned'].sum()
         
         metrics = {
             "Total Staff": total_staff,
-            "Total Tablets": total_tablets,
-            "No Tablet": len(df[df['Number of EINK Tablet Assigned'] == 0]),
-            "Over Assigned": len(df[df['Number of EINK Tablet Assigned'] > 1]),
-            "Not Using": len(df[(df['Number of EINK Tablet Assigned'] > 0) & (df['Count Unique Devices Logged In'] == 0)]),
-            "Using Others": len(df[df['Matches SnipeIT?'] == "No"]),
-            "Multiple Devices": len(df[df['Count Unique Devices Logged In'] > 1])
+            "Total Assigned": total_assigned_tablets,
+            "Staff without assigned tablet": len(df[df['Number of EINK Tablet Assigned'] == 0]),
+            "Staff assigned more tablets than allowed": len(df[df['Number of EINK Tablet Assigned'] > 1]),
+            "Staff assigned tablet but not using/log in it": len(df[(df['Number of EINK Tablet Assigned'] > 0) & (df['Count Unique Devices Logged In'] == 0)]),
+            "Staff using tablets assigned to others": len(df[df['Matches SnipeIT?'] == "No"]),
+            "Staff logging into multiple devices": len(df[df['Count Unique Devices Logged In'] > 1])
         }
 
         return df, metrics
@@ -76,25 +77,39 @@ st.title("NewGlobe · JigawaUNITE Audit")
 final_df, summary = generate_jigawa_audit()
 
 if final_df is not None:
-    total = summary["Total Staff"]
+    total_pop = summary["Total Staff"]
 
-    # --- ROW 1: Totals ---
+    # --- ROW 1: Grand Totals ---
     t1, t2 = st.columns(2)
-    t1.metric("Total Active Staff (Payroll)", f"{summary['Total Staff']}")
-    t2.metric("Total Assigned Tablets (SnipeIT)", f"{summary['Total Tablets']}")
+    t1.metric("Total Active Staff", f"{summary['Total Staff']}")
+    t2.metric("Total Number of Assigned Tablets", f"{summary['Total Assigned']}")
     
-    st.write("### Compliance Metrics")
+    st.write("---")
     
-    # --- ROW 2: Summary Boxes with % ---
+    # --- ROW 2: Your Exact Names ---
     m1, m2, m3, m4, m5 = st.columns(5)
     
-    m1.metric("No Tablet", f"{summary['No Tablet']}", f"{(summary['No Tablet']/total)*100:.1f}%", delta_color="inverse")
-    m2.metric("Over-Assigned", f"{summary['Over Assigned']}", f"{(summary['Over Assigned']/total)*100:.1f}%", delta_color="inverse")
-    m3.metric("Not Using", f"{summary['Not Using']}", f"{(summary['Not Using']/total)*100:.1f}%", delta_color="inverse")
-    m4.metric("Using Others", f"{summary['Using Others']}", f"{(summary['Using Others']/total)*100:.1f}%", delta_color="inverse")
-    m5.metric("Multiple Devices", f"{summary['Multiple Devices']}", f"{(summary['Multiple Devices']/total)*100:.1f}%", delta_color="inverse")
+    m1.metric("Staff without assigned tablet", 
+              f"{summary['Staff without assigned tablet']}", 
+              f"{(summary['Staff without assigned tablet']/total_pop)*100:.1f}%", delta_color="inverse")
+    
+    m2.metric("Staff assigned more tablets than allowed", 
+              f"{summary['Staff assigned more tablets than allowed']}", 
+              f"{(summary['Staff assigned more tablets than allowed']/total_pop)*100:.1f}%", delta_color="inverse")
+    
+    m3.metric("Staff assigned tablet but not using/log in it", 
+              f"{summary['Staff assigned tablet but not using/log in it']}", 
+              f"{(summary['Staff assigned tablet but not using/log in it']/total_pop)*100:.1f}%", delta_color="inverse")
+    
+    m4.metric("Staff using tablets assigned to others", 
+              f"{summary['Staff using tablets assigned to others']}", 
+              f"{(summary['Staff using tablets assigned to others']/total_pop)*100:.1f}%", delta_color="inverse")
+    
+    m5.metric("Staff logging into multiple devices", 
+              f"{summary['Staff logging into multiple devices']}", 
+              f"{(summary['Staff logging into multiple devices']/total_pop)*100:.1f}%", delta_color="inverse")
 
-    st.divider()
+    st.write("---")
 
     # Detailed Table
     st.subheader("📋 Audit Detail View")
@@ -103,5 +118,6 @@ if final_df is not None:
                    'Tablet ID Used', 'Count Unique Devices Logged In', 'Matches SnipeIT?']
     st.dataframe(final_df[output_cols], use_container_width=True)
     
+    # Export Button
     csv = final_df[output_cols].to_csv(index=False).encode('utf-8')
     st.download_button("📥 Export CSV Report", csv, "Jigawa_Full_Audit.csv", "text/csv")
