@@ -4,16 +4,14 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# Custom CSS for NewGlobe Dashboard Style and Right-Aligned Navigation
+# Custom CSS for NewGlobe Style and Right-Aligned Navigation
 st.markdown("""
     <style>
     [data-testid="stMetricValue"] { font-size: 28px; font-weight: bold; }
-    /* Align the segmented control container to the right */
     .stSegmentedControl {
         display: flex;
         justify-content: flex-end;
     }
-    /* Optional: Style adjustments for the segmented control buttons */
     div[data-testid="stSegmentedControl"] button {
         min-width: 120px;
     }
@@ -58,38 +56,49 @@ def generate_audit_data():
         df['Number of EINK Tablet Assigned'] = df['Number of EINK Tablet Assigned'].fillna(0).astype(int)
         df['Count Unique Devices Logged In'] = df['Count Unique Devices Logged In'].fillna(0).astype(int)
         
+        # Match Logic
         def check_match(row):
             assigned = str(row.get('Tablet ID Assigned', '')).strip().lower()
             used = str(row.get('Tablet ID Used', '')).strip().lower()
             if assigned in ['nan', ''] or used in ['nan', '']: return "No Data"
-            a_set = set([s.strip() for s in assigned.split(',')])
-            u_set = set([s.strip() for s in used.split(',')])
+            a_set, u_set = set([s.strip() for s in assigned.split(',')]), set([s.strip() for s in used.split(',')])
             return "Yes" if a_set == u_set else ("Partial Match" if not a_set.isdisjoint(u_set) else "No")
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
+
+        # SPECIAL LOGIC: Filter for "Staff assigned more tablets than allowed"
+        # 1. Start with anyone who has > 1 tablet
+        over_assigned_mask = df['Number of EINK Tablet Assigned'] > 1
+        
+        # 2. Identify Headteachers
+        # Checks if "headteacher" or "head teacher" is in the Job Title string
+        is_headteacher = df['Job Title'].str.contains('headteacher|head teacher', case=False, na=False)
+        
+        # 3. Exclude Headteachers if they have exactly 2 tablets
+        exclude_ht = is_headteacher & (df['Number of EINK Tablet Assigned'] == 2)
+        
+        # Apply the exclusion
+        over_assigned_df = df[over_assigned_mask & ~exclude_ht]
 
         summary_vals = {
             "Total Staff": len(active),
             "Total Assigned": snipe_counts['Number of EINK Tablet Assigned'].sum(),
             "No Tablet": df[df['Number of EINK Tablet Assigned'] == 0],
-            "More Than Allowed": df[df['Number of EINK Tablet Assigned'] > 1],
+            "More Than Allowed": over_assigned_df,
             "Not Using": df[(df['Number of EINK Tablet Assigned'] > 0) & (df['Count Unique Devices Logged In'] == 0)],
             "Assigned Others": df[df['Matches SnipeIT?'] == "No"],
             "Multiple Devices": df[df['Count Unique Devices Logged In'] > 1]
         }
         return df, summary_vals
     except Exception as e:
-        st.error(f"Audit Data Error: {e}")
+        st.error(f"Data Error: {e}")
         return None, None
 
-# --- HEADER WITH TOP-RIGHT SEGMENTED CONTROL ---
-header_col1, header_col2 = st.columns([1, 1])
-
-with header_col1:
+# --- HEADER ---
+h1, h2 = st.columns([1, 1])
+with h1:
     st.title("NewGlobe · JigawaUNITE")
-
-with header_col2:
-    # Segmented Control placed in the top right
+with h2:
     view = st.segmented_control(
         "Navigation", 
         options=["📊 Summary", "📋 Breakdown", "🚨 Escalation"], 
@@ -103,9 +112,9 @@ st.write("---")
 audit_df, summary = generate_audit_data()
 
 if audit_df is not None:
-    # --- SUMMARY VIEW ---
+    total_pop = summary["Total Staff"]
+
     if view == "📊 Summary":
-        total_pop = summary["Total Staff"]
         t1, t2 = st.columns(2)
         t1.metric("Total Active Staff", summary["Total Staff"])
         t2.metric("Total Number of Assigned Tablets", summary["Total Assigned"])
@@ -118,13 +127,11 @@ if audit_df is not None:
         m4.metric("Staff using tablets assigned to others", len(summary["Assigned Others"]), f"{(len(summary['Assigned Others'])/total_pop)*100:.1f}%")
         m5.metric("Staff logging into multiple devices", len(summary["Multiple Devices"]), f"{(len(summary['Multiple Devices'])/total_pop)*100:.1f}%")
 
-    # --- BREAKDOWN VIEW ---
     elif view == "📋 Breakdown":
         st.subheader("Detailed Audit Breakdown")
         cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title', 'Tablet ID Assigned', 'Number of EINK Tablet Assigned', 'Tablet ID Used', 'Count Unique Devices Logged In', 'Matches SnipeIT?']
         st.dataframe(audit_df[cols], use_container_width=True, hide_index=True)
 
-    # --- ESCALATION VIEW ---
     elif view == "🚨 Escalation":
         st.header("🚨 Priority Escalation Action Lists")
         common = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title']
@@ -132,7 +139,8 @@ if audit_df is not None:
         with st.expander("1. Staff without assigned tablet", expanded=True):
             st.dataframe(summary["No Tablet"][common], use_container_width=True, hide_index=True)
 
-        with st.expander("2. Staff assigned more tablets than allowed", expanded=True):
+        with st.expander("2. Staff assigned more tablets than allowed (Excl. HT with 2)", expanded=True):
+            st.info("💡 Note: Headteachers with exactly 2 tablets are authorized and excluded from this list.")
             st.dataframe(summary["More Than Allowed"][common + ['Tablet ID Assigned', 'Number of EINK Tablet Assigned']], use_container_width=True, hide_index=True)
 
         with st.expander("3. Staff assigned tablet but not using/log in it", expanded=True):
