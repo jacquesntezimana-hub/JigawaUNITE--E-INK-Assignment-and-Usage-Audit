@@ -1,4 +1,4 @@
-import streamlit as st
+ import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="Jigawa Audit Report", layout="wide")
@@ -12,7 +12,7 @@ def generate_jigawa_audit():
         snipe = pd.read_excel("Snipe_IT.xlsx")
         geo = pd.read_excel("Geolocation Sync 07_10 Apr.xlsx")
 
-        # Clean column names
+        # Clean column names for all files
         active.columns = active.columns.str.strip()
         snipe.columns = snipe.columns.str.strip()
         geo.columns = geo.columns.str.strip()
@@ -22,24 +22,23 @@ def generate_jigawa_audit():
         snipe['JOIN_ID'] = snipe['Username'].astype(str).str.strip()
         geo['JOIN_ID'] = geo['Employee Id'].astype(str).str.strip()
 
-        # 3. Find the Serial column in Snipe IT (flexible search)
+        # 3. Find the Serial column in Snipe IT
         snipe_serial_col = next((c for c in snipe.columns if 'SERIAL' in c.upper()), None)
         
         # 4. AGGREGATE SNIPE IT (Tablets Assigned)
-        # Combine serials and count total tablets
+        # Combine multiple serials with commas and count total assignments
         snipe_grouped = snipe.groupby('JOIN_ID').agg({
             snipe_serial_col: lambda x: ', '.join(x.astype(str).unique())
         }).reset_index()
         
-        # Add the count
         snipe_counts = snipe.groupby('JOIN_ID').size().reset_index(name='Number of EINK Tablet Assigned')
         snipe_final = pd.merge(snipe_grouped, snipe_counts, on='JOIN_ID')
         
-        # RENAME AS REQUESTED
+        # Rename Snipe serial to 'Tablet ID Assigned'
         snipe_final = snipe_final.rename(columns={snipe_serial_col: 'Tablet ID Assigned'})
 
         # 5. AGGREGATE GEOLOCATION (Tablets Used)
-        # Combine used serials and count unique devices
+        # Combine used serials with commas and count unique devices
         geo_grouped = geo.groupby('JOIN_ID').agg({
             'Device Serial': lambda x: ', '.join(x.astype(str).unique())
         }).reset_index()
@@ -47,11 +46,11 @@ def generate_jigawa_audit():
         geo_counts = geo.groupby('JOIN_ID')['Device Serial'].nunique().reset_index(name='Count Unique Devices Logged In')
         geo_final = pd.merge(geo_grouped, geo_counts, on='JOIN_ID')
         
-        # RENAME AS REQUESTED
+        # Rename Geolocation serial to 'Tablet ID Used'
         geo_final = geo_final.rename(columns={'Device Serial': 'Tablet ID Used'})
 
         # 6. MERGE ALL TOGETHER
-        # Left join on Active Staff keeps everyone in payroll
+        # Left join on Active Staff ensures we see all employees
         df = pd.merge(active, snipe_final, on='JOIN_ID', how='left')
         df = pd.merge(df, geo_final, on='JOIN_ID', how='left')
 
@@ -63,7 +62,7 @@ def generate_jigawa_audit():
             if assigned in ['nan', 'none', ''] or used in ['nan', 'none', '']:
                 return "No Data"
             
-            # Split strings back to sets to compare them
+            # Convert comma strings to sets for comparison
             assigned_set = set([s.strip() for s in assigned.split(',')])
             used_set = set([s.strip() for s in used.split(',')])
             
@@ -76,7 +75,8 @@ def generate_jigawa_audit():
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
-        # 8. FINAL OUTPUT SELECTION (The 9 Columns)
+        # 8. FINAL OUTPUT COLUMN SELECTION
+        # These are the exact 9 columns you requested
         output_columns = [
             'EmployeeID',
             'Employee Name',
@@ -89,23 +89,29 @@ def generate_jigawa_audit():
             'Matches SnipeIT?'
         ]
 
-        # Ensure columns exist and fill empty counts with 0
+        # Final Cleaning: Fill empty numbers with 0 and NAs with empty string
         final_df = df[output_columns].copy()
         final_df['Number of EINK Tablet Assigned'] = final_df['Number of EINK Tablet Assigned'].fillna(0).astype(int)
         final_df['Count Unique Devices Logged In'] = final_df['Count Unique Devices Logged In'].fillna(0).astype(int)
+        final_df = final_df.fillna("")
         
         return final_df
 
     except Exception as e:
-        st.error(f"Critical Error: {e}")
+        st.error(f"Mapping Error: {e}")
         return None
 
-# --- UI ---
-report_data = generate_jigawa_audit()
+# --- STREAMLIT UI ---
+report_df = generate_jigawa_audit()
 
-if report_data is not None:
-    st.dataframe(report_data, use_container_width=True)
+if report_df is not None:
+    st.dataframe(report_df, use_container_width=True)
     
-    # Export Button
-    csv = report_data.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Full Audit Report (CSV)", csv, "Jigawa_Audit_Final.csv", "text/csv")
+    # Download Link
+    csv = report_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download Audit Report (CSV)",
+        data=csv,
+        file_name="Jigawa_Audit_Final_Report.csv",
+        mime="text/csv"
+    )
