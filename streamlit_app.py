@@ -1,14 +1,15 @@
 import streamlit as st
 import pandas as pd
 
-# Set page to wide mode to accommodate the 5-column layout
+# Set page to wide mode
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# Custom CSS to mimic the dark, professional dashboard look
+# Custom CSS for the NewGlobe "Dark Mode" feel
 st.markdown("""
     <style>
-    [data-testid="stMetricValue"] { font-size: 28px; }
+    [data-testid="stMetricValue"] { font-size: 32px; font-weight: bold; }
     [data-testid="stMetricDelta"] { font-size: 16px; }
+    .main { background-color: #0e1117; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -23,14 +24,14 @@ def generate_jigawa_audit():
         for df in [active, snipe, geo]:
             df.columns = df.columns.str.strip()
 
-        # 2. Standardize Join Keys
+        # 2. Join Keys
         active['JOIN_ID'] = active['EmployeeID'].astype(str).str.strip()
         snipe['JOIN_ID'] = snipe['Username'].astype(str).str.strip()
         geo['JOIN_ID'] = geo['Employee Id'].astype(str).str.strip()
 
         snipe_serial_col = next((c for c in snipe.columns if 'SERIAL' in c.upper()), None)
         
-        # 3. Aggregations (Merging multiple serials into one cell)
+        # 3. Aggregations
         snipe_grouped = snipe.groupby('JOIN_ID').agg({
             snipe_serial_col: lambda x: ', '.join(x.astype(str).unique())
         }).reset_index()
@@ -50,24 +51,21 @@ def generate_jigawa_audit():
         df['Number of EINK Tablet Assigned'] = df['Number of EINK Tablet Assigned'].fillna(0).astype(int)
         df['Count Unique Devices Logged In'] = df['Count Unique Devices Logged In'].fillna(0).astype(int)
         
-        # 5. Logic: Match Check
+        # 5. Logic Check
         def check_match(row):
             assigned = str(row.get('Tablet ID Assigned', '')).strip().lower()
             used = str(row.get('Tablet ID Used', '')).strip().lower()
             if assigned in ['nan', ''] or used in ['nan', '']: return "No Data"
-            a_set = set([s.strip() for s in assigned.split(',')])
-            u_set = set([s.strip() for s in used.split(',')])
+            a_set, u_set = set(assigned.split(',')), set(used.split(','))
             return "Yes" if a_set == u_set else ("Partial Match" if not a_set.isdisjoint(u_set) else "No")
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
-        # 6. Calculations for Metrics
+        # 6. Metric Calculations
         total_staff = len(active)
-        total_assigned_tablets = snipe_counts['Number of EINK Tablet Assigned'].sum()
-        
-        summary_data = {
+        summary_vals = {
             "Total Staff": total_staff,
-            "Total Assigned": total_assigned_tablets,
+            "Total Assigned": snipe_counts['Number of EINK Tablet Assigned'].sum(),
             "Staff without assigned tablet": len(df[df['Number of EINK Tablet Assigned'] == 0]),
             "Staff assigned more tablets than allowed": len(df[df['Number of EINK Tablet Assigned'] > 1]),
             "Staff assigned tablet but not using/log in it": len(df[(df['Number of EINK Tablet Assigned'] > 0) & (df['Count Unique Devices Logged In'] == 0)]),
@@ -75,76 +73,64 @@ def generate_jigawa_audit():
             "Staff logging into multiple devices": len(df[df['Count Unique Devices Logged In'] > 1])
         }
 
-        return df, summary_data
+        return df, summary_vals
 
     except Exception as e:
-        st.error(f"Error processing dashboard data: {e}")
+        st.error(f"Error: {e}")
         return None, None
 
-# --- UI LAYOUT ---
+# --- HEADER SECTION ---
 st.title("NewGlobe · JigawaUNITE")
-st.markdown("### Tablet Compliance Audit Summary")
+st.markdown("#### Tablet Compliance Audit")
 
 final_df, summary = generate_jigawa_audit()
 
 if final_df is not None:
-    total_pop = summary["Total Staff"]
+    # --- NAVIGATION TABS ---
+    # This creates the menu you highlighted in your image
+    tab_summary, tab_breakdown = st.tabs(["📊 Summary", "📋 Breakdown"])
 
-    # --- TOP ROW: Totals ---
-    t1, t2 = st.columns(2)
-    with t1:
-        st.metric("Total Active Staff", summary["Total Staff"])
-    with t2:
-        st.metric("Total Number of Assigned Tablets", summary["Total Assigned"])
+    # --- SUMMARY TAB ---
+    with tab_summary:
+        total_pop = summary["Total Staff"]
+        
+        # Totals Row
+        t1, t2 = st.columns(2)
+        t1.metric("Total Active Staff", summary["Total Staff"])
+        t2.metric("Total Number of Assigned Tablets", summary["Total Assigned"])
+        
+        st.write("---")
+        
+        # Compliance Boxes Row
+        m1, m2, m3, m4, m5 = st.columns(5)
+        
+        m1.metric("Staff without assigned tablet", summary["Staff without assigned tablet"], 
+                  f"{(summary['Staff without assigned tablet']/total_pop)*100:.1f}%")
+        
+        m2.metric("Staff assigned more tablets than allowed", summary["Staff assigned more tablets than allowed"], 
+                  f"{(summary['Staff assigned more tablets than allowed']/total_pop)*100:.1f}%")
+        
+        m3.metric("Staff assigned tablet but not using/log in it", summary["Staff assigned tablet but not using/log in it"], 
+                  f"{(summary['Staff assigned tablet but not using/log in it']/total_pop)*100:.1f}%")
+        
+        m4.metric("Staff using tablets assigned to others", summary["Staff using tablets assigned to others"], 
+                  f"{(summary['Staff using tablets assigned to others']/total_pop)*100:.1f}%")
+        
+        m5.metric("Staff logging into multiple devices", summary["Staff logging into multiple devices"], 
+                  f"{(summary['Staff logging into multiple devices']/total_pop)*100:.1f}%")
 
-    st.write("---")
-
-    # --- MAIN ROW: Compliance Metric Boxes ---
-    m1, m2, m3, m4, m5 = st.columns(5)
-    
-    with m1:
-        st.metric(label="Staff without assigned tablet", 
-                  value=summary["Staff without assigned tablet"], 
-                  delta=f"{(summary['Staff without assigned tablet']/total_pop)*100:.1f}% of Total", 
-                  delta_color="inverse")
-    
-    with m2:
-        st.metric(label="Staff assigned more tablets than allowed", 
-                  value=summary["Staff assigned more tablets than allowed"], 
-                  delta=f"{(summary['Staff assigned more tablets than allowed']/total_pop)*100:.1f}% of Total", 
-                  delta_color="inverse")
-    
-    with m3:
-        st.metric(label="Staff assigned tablet but not using/log in it", 
-                  value=summary["Staff assigned tablet but not using/log in it"], 
-                  delta=f"{(summary['Staff assigned tablet but not using/log in it']/total_pop)*100:.1f}% of Total", 
-                  delta_color="inverse")
-    
-    with m4:
-        st.metric(label="Staff using tablets assigned to others", 
-                  value=summary["Staff using tablets assigned to others"], 
-                  delta=f"{(summary['Staff using tablets assigned to others']/total_pop)*100:.1f}% of Total", 
-                  delta_color="inverse")
-    
-    with m5:
-        st.metric(label="Staff logging into multiple devices", 
-                  value=summary["Staff logging into multiple devices"], 
-                  delta=f"{(summary['Staff logging into multiple devices']/total_pop)*100:.1f}% of Total", 
-                  delta_color="inverse")
-
-    st.write("---")
-
-    # --- BOTTOM SECTION: Detailed Table ---
-    st.subheader("📋 Detailed Audit Breakdown")
-    
-    display_cols = [
-        'EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title', 
-        'Tablet ID Assigned', 'Number of EINK Tablet Assigned', 
-        'Tablet ID Used', 'Count Unique Devices Logged In', 'Matches SnipeIT?'
-    ]
-    
-    st.dataframe(final_df[display_cols], use_container_width=True, hide_index=True)
-    
-    # Export capability
-    csv = final_df[display_cols].to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Audit CSV", csv, "Jigawa_Compliance_Audit.csv", "text/csv")
+    # --- BREAKDOWN TAB ---
+    with tab_breakdown:
+        st.subheader("Detailed Compliance Breakdown")
+        
+        output_cols = [
+            'EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title', 
+            'Tablet ID Assigned', 'Number of EINK Tablet Assigned', 
+            'Tablet ID Used', 'Count Unique Devices Logged In', 'Matches SnipeIT?'
+        ]
+        
+        st.dataframe(final_df[output_cols], use_container_width=True, hide_index=True)
+        
+        # Export Button only in Breakdown
+        csv = final_df[output_cols].to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Export CSV", csv, "Jigawa_Audit_Breakdown.csv", "text/csv")
