@@ -13,65 +13,71 @@ def generate_jigawa_audit():
         geo = pd.read_excel("Geolocation Sync 07_10 Apr.xlsx")
 
         # Clean all column names of invisible spaces
-        active.columns = active.columns.str.strip()
-        snipe.columns = snipe.columns.str.strip()
-        geo.columns = geo.columns.str.strip()
+        for df in [active, snipe, geo]:
+            df.columns = df.columns.str.strip()
 
         # 2. Standardize Join Keys
         active['JOIN_ID'] = active['EmployeeID'].astype(str).str.strip()
         snipe['JOIN_ID'] = snipe['Username'].astype(str).str.strip()
         geo['JOIN_ID'] = geo['Employee Id'].astype(str).str.strip()
 
-        # 3. DYNAMIC SEARCH FOR 'SERIAL' in Active Staff
-        # This looks for any column containing 'Serial'
-        active_serial_col = next((c for c in active.columns if 'SERIAL' in c.upper()), None)
-        if not active_serial_col:
-            st.error(f"Could not find a 'Serial' column in Active Staff. Available: {list(active.columns)}")
+        # 3. DYNAMIC SEARCH FOR 'SERIAL' in Snipe_IT
+        # Looks for 'Serial', 'Serial Number', etc. in the Snipe_IT file
+        snipe_serial_col = next((c for c in snipe.columns if 'SERIAL' in c.upper()), None)
+        if not snipe_serial_col:
+            st.error(f"Could not find a 'Serial' column in Snipe_IT. Available: {list(snipe.columns)}")
             return None
 
         # 4. CALCULATIONS
-        # Count Tablets assigned per user from Snipe_IT
+        # A. Count Tablets assigned per user from Snipe_IT
         tablet_counts = snipe.groupby('JOIN_ID').size().reset_index(name='Number of EINK Tablet Assigned')
 
-        # Count Unique Devices Logged In from Geolocation
+        # B. Count Unique Devices Logged In from Geolocation
         geo_unique = geo.groupby('JOIN_ID')['Device Serial'].nunique().reset_index(name='Count Unique Devices Logged In')
 
         # 5. PERFORM MERGES
+        # Start with Active Staff to keep all payroll records
         df = pd.merge(active, tablet_counts, on='JOIN_ID', how='left')
         df = pd.merge(df, geo_unique, on='JOIN_ID', how='left')
         
-        # Merge Geolocation details to get the actual 'Device Serial' string
+        # Merge Snipe_IT details to get the 'Official Serial'
+        # We drop duplicates to ensure one row per user
+        snipe_details = snipe[['JOIN_ID', snipe_serial_col]].drop_duplicates('JOIN_ID')
+        df = pd.merge(df, snipe_details, on='JOIN_ID', how='left')
+
+        # Merge Geolocation details to get the 'Device Serial' (actual usage)
         geo_details = geo[['JOIN_ID', 'Device Serial']].drop_duplicates('JOIN_ID')
         df = pd.merge(df, geo_details, on='JOIN_ID', how='left')
 
         # 6. LOGIC: Matches SnipeIT?
+        # Compares 'Official Serial' (Snipe_IT) vs 'Device Serial' (Geo Sync)
         def check_match(row):
-            s_active = str(row.get(active_serial_col, '')).strip().lower()
-            s_geo = str(row.get('Device Serial', '')).strip().lower()
-            if s_active in ['nan', 'None', ''] or s_geo in ['nan', 'None', '']:
+            s_official = str(row.get(snipe_serial_col, '')).strip().lower()
+            s_actual = str(row.get('Device Serial', '')).strip().lower()
+            
+            if s_official in ['nan', 'none', ''] or s_actual in ['nan', 'none', '']:
                 return "No Data"
-            return "Yes" if s_active == s_geo else "No"
+            return "Yes" if s_official == s_actual else "No"
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
         # 7. FINAL COLUMN SELECTION
-        # We use the 'active_serial_col' we found dynamically
         output_mapping = {
             'EmployeeID': 'EmployeeID',
             'Employee Name': 'Employee Name',
             'Current Academy Code': 'Current Academy Code',
             'Job Title': 'Job Title',
-            active_serial_col: 'Serial', # Renaming it to your requested 'Serial'
+            snipe_serial_col: 'Serial', # This is your 'Serial' from Snipe_IT
             'Number of EINK Tablet Assigned': 'Number of EINK Tablet Assigned',
             'Device Serial': 'Device Serial',
             'Count Unique Devices Logged In': 'Count Unique Devices Logged In',
             'Matches SnipeIT?': 'Matches SnipeIT?'
         }
 
-        # Filter and Rename
+        # Select and Rename for the final view
         final_df = df[list(output_mapping.keys())].rename(columns=output_mapping)
         
-        # Clean up numbers
+        # Format numbers
         final_df['Number of EINK Tablet Assigned'] = final_df['Number of EINK Tablet Assigned'].fillna(0).astype(int)
         final_df['Count Unique Devices Logged In'] = final_df['Count Unique Devices Logged In'].fillna(0).astype(int)
 
@@ -88,4 +94,4 @@ if report_df is not None:
     st.dataframe(report_df, use_container_width=True)
     
     csv = report_df.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Integrated Audit Report", csv, "Jigawa_Audit_Report.csv", "text/csv")
+    st.download_button("Download Final Audit Report", csv, "Jigawa_Audit_Final.csv", "text/csv")
