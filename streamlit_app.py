@@ -2,12 +2,12 @@ import streamlit as st
 import pandas as pd
 
 # 1. Page Configuration
-st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
+st.set_config = st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
-# --- ADVANCED UI FIXES: FORCED TEXT WRAPPING & VISIBILITY ---
+# --- UI THEME REPAIR: NO WHITE BOXES, HIGH VISIBILITY ---
 st.markdown("""
     <style>
-    /* 1. Overall Theme */
+    /* 1. Overall Theme - Deep Dark */
     .stApp { background-color: #020617 !important; color: #F8FAFC !important; }
     
     /* 2. Navigation Styling (Single Row, High Contrast) */
@@ -17,28 +17,33 @@ st.markdown("""
         justify-content: flex-end !important; 
         margin-top: -65px !important; 
         gap: 5px !important;
+        background: transparent !important;
     }
     div[data-testid="stSegmentedControl"] button {
         background-color: #1E293B !important; 
-        color: #F8FAFC !important; 
+        color: #38BDF8 !important; /* BLUE/CYAN TEXT */
         border: 1px solid #334155 !important;
         font-size: 11px !important;
+        font-weight: 800 !important;
         padding: 8px 15px !important;
-        min-width: 130px !important;
+        min-width: 135px !important;
+        text-transform: uppercase;
     }
+    /* Selected Button: Black text on Cyan background */
     div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
         background-color: #38BDF8 !important; 
-        color: #020617 !important; 
+        color: #000000 !important; 
+        border: 1px solid #38BDF8 !important;
     }
 
-    /* 3. Custom KPI Card (Replaces st.metric for better wrapping) */
+    /* 3. Custom KPI Card (Forced Wrapping) */
     .kpi-card {
         background-color: #0F172A;
         border: 1px solid #1E293B;
         padding: 15px;
         border-radius: 8px;
         text-align: center;
-        min-height: 140px;
+        min-height: 150px;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -46,22 +51,22 @@ st.markdown("""
         margin-bottom: 10px;
     }
     .kpi-label {
-        font-size: 11px;
+        font-size: 10px;
         color: #94A3B8;
-        font-weight: 600;
+        font-weight: 700;
         text-transform: uppercase;
         line-height: 1.3;
         margin-bottom: 8px;
-        word-wrap: break-word;
-        white-space: normal; /* Force Wrapping */
+        white-space: normal !important; /* Force Wrapping */
+        word-wrap: break-word !important;
     }
     .kpi-value {
         font-size: 24px;
-        font-weight: 700;
+        font-weight: 800;
         color: #38BDF8;
     }
     .kpi-perc {
-        font-size: 12px;
+        font-size: 11px;
         color: #64748B;
         margin-top: 4px;
     }
@@ -69,7 +74,7 @@ st.markdown("""
     /* 4. Table and Header Adjustments */
     [data-testid="stDataFrame"], [data-testid="stDataEditor"] { font-size: 11px !important; }
     h1 { color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }
-    h3 { font-size: 0.9rem !important; color: #38BDF8; margin-top: 20px; text-transform: uppercase; font-weight: 700; }
+    h3 { font-size: 0.85rem !important; color: #38BDF8; margin-top: 20px; text-transform: uppercase; font-weight: 700; }
     hr { border-top: 1px solid #1E293B; }
     </style>
     """, unsafe_allow_html=True)
@@ -113,6 +118,9 @@ def generate_audit_data():
         df['AssignedCount'] = df['AssignedCount'].fillna(0).astype(int)
         df['UsedCount'] = df['UsedCount'].fillna(0).astype(int)
         
+        # --- LOGIC: EXCLUDE HEADTEACHERS FROM EXCESSIVE DEVICES ---
+        excessive_mask = (df['AssignedCount'] > 1) & (~df['Job Title'].str.contains('Headteacher', case=False, na=False))
+        
         def check_match(row):
             assigned = str(row.get('Tablet ID Assigned', '')).strip().lower()
             used = str(row.get('Tablet ID Used', '')).strip().lower()
@@ -126,7 +134,7 @@ def generate_audit_data():
             "Total Staff": len(active),
             "Total Assigned": snipe_counts['AssignedCount'].sum(),
             "No Tablet": df[df['AssignedCount'] == 0].copy(),
-            "More Than Allowed": df[df['AssignedCount'] > 1].copy(),
+            "More Than Allowed": df[excessive_mask].copy(), # Headteachers excluded here
             "Not Using": df[(df['AssignedCount'] > 0) & (df['UsedCount'] == 0)].copy(),
             "Assigned Others": df[df['Matches SnipeIT?'] == "No"].copy(),
             "Multiple Devices": df[df['UsedCount'] > 1].copy()
@@ -142,7 +150,7 @@ def generate_audit_data():
 # --- HEADER & NAVIGATION ---
 h1, h2 = st.columns([2.2, 1.8])
 with h1:
-    st.title("JIGAWAUNITE:: E-INK Assignment and Usage Digital Audit")
+    st.title("JIGAWAUNITE:: E-INK Digital Audit")
 with h2:
     view = st.segmented_control("NAV", options=["📊 SUMMARY", "📋 BREAKDOWN", "🚨 ESCALATION"], selection_mode="single", default="📊 SUMMARY", label_visibility="collapsed")
 
@@ -161,7 +169,6 @@ if data is not None:
         st.write("### NON-COMPLIANCE SUMMARY")
         m = st.columns(5)
         
-        # Wrapped KPI Box Helper
         def kpi_box(col, label, df):
             count = len(df)
             perc = f"{(count / total_pop) * 100:.1f}%" if total_pop > 0 else "0%"
@@ -171,10 +178,10 @@ if data is not None:
         kpi_box(m[1], "STAFF WITH EXCESSIVE DEVICES THAN ALLOWED", summary["More Than Allowed"])
         kpi_box(m[2], "STAFF ASSIGNED TABLET BUT NOT USING IT", summary["Not Using"])
         kpi_box(m[3], "STAFF USING OTHERS' TABLETS", summary["Assigned Others"])
-        kpi_box(m[4], "STAFF LOGING INTO MULTIPLE DEVICES", summary["Multiple Devices"])
+        kpi_box(m[4], "STAFF LOGGING INTO MULTIPLE DEVICES", summary["Multiple Devices"])
 
     elif view == "📋 BREAKDOWN":
-        breakdown_cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'County', 'Job Title', 'Phone Number', 'Tablet ID Assigned', 'AssignedCount', 'Tablet ID Used', 'UsedCount', 'Matches SnipeIT?']
+        breakdown_cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'County', 'Job Title', 'Tablet ID Assigned', 'AssignedCount', 'Tablet ID Used', 'UsedCount', 'Matches SnipeIT?']
         st.dataframe(data[breakdown_cols], use_container_width=True, hide_index=True)
 
     elif view == "🚨 ESCALATION":
@@ -186,7 +193,7 @@ if data is not None:
             st.write("### STAFF WITHOUT ASSIGNED TABLET")
             st.data_editor(summary["No Tablet"][base + comment], use_container_width=True, hide_index=True, key="x1")
         with e2:
-            st.write("### STAFF WITH EXCESSIVE DEVICES THAN ALLOWED")
+            st.write("### STAFF WITH EXCESSIVE DEVICES THAN ALLOWED (EXCL. HEADTEACHERS)")
             st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="x2")
         
         st.write("---")
@@ -197,7 +204,4 @@ if data is not None:
         with e4:
             st.write("### STAFF USING OTHERS' TABLETS")
             st.data_editor(summary["Assigned Others"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="x4")
-        
-        st.write("---")
-        st.write("### STAFF LOGING INTO MULTIPLE DEVICES")
-        st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="x5")
+            
