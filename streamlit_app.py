@@ -4,30 +4,52 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# --- PREMIUM AESTHETICS ---
+# --- HIGH-END DARK THEME CSS ---
 st.markdown("""
     <style>
-    .stApp { background-color: #F8FAFC; }
+    /* Main Background and Text */
+    .stApp { background-color: #0F172A; color: #F8FAFC; }
+    
+    /* Top-Right Navigation Alignment */
     .stSegmentedControl { display: flex; justify-content: flex-end; margin-top: -65px; }
+    
+    /* Boxed Metric Cards */
     div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        border: 1px solid #E2E8F0;
+        background-color: #1E293B;
+        border: 1px solid #334155;
         padding: 15px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border-radius: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     }
-    [data-testid="stMetricValue"] { font-size: 32px !important; font-weight: 700 !important; color: #1E3A8A; }
-    [data-testid="stMetricLabel"] { font-size: 13px !important; color: #64748B; font-weight: 600; text-transform: uppercase; }
-    div[data-testid="stSegmentedControl"] button { border-radius: 10px !important; min-width: 130px; font-weight: 600; }
-    h3 { font-size: 1rem !important; color: #1E293B; font-weight: 700; border-left: 5px solid #3B82F6; padding-left: 12px; margin-bottom: 12px; }
-    hr { border-top: 1px solid #E2E8F0; margin-top: 1rem; margin-bottom: 2rem; }
+    [data-testid="stMetricValue"] { font-size: 26px !important; font-weight: 700 !important; color: #38BDF8; }
+    [data-testid="stMetricLabel"] { font-size: 11px !important; color: #94A3B8; font-weight: 600; text-transform: uppercase; }
+
+    /* Small Font for Tables (Breakdown & Escalation) */
+    [data-testid="stTable"], [data-testid="stDataFrame"], .stDataEditor {
+        font-size: 12px !important;
+    }
+    
+    /* Segmented Control Styling */
+    div[data-testid="stSegmentedControl"] button {
+        background-color: #1E293B !important;
+        color: #F8FAFC !important;
+        border-radius: 8px !important;
+        min-width: 130px;
+        font-size: 12px;
+    }
+
+    /* Section Headers */
+    h1 { color: #F8FAFC; font-size: 22px !important; font-weight: 800; }
+    h3 { font-size: 0.9rem !important; color: #38BDF8; font-weight: 700; margin-bottom: 10px; }
+    
+    /* Divider */
+    hr { border-top: 1px solid #334155; }
     </style>
     """, unsafe_allow_html=True)
 
 @st.cache_data
 def generate_audit_data():
     try:
-        # Load Files
         active = pd.read_excel("Active Staff.xlsx")
         snipe = pd.read_excel("Snipe_IT.xlsx")
         geo = pd.read_excel("Geolocation Sync 07_10 Apr.xlsx")
@@ -62,19 +84,19 @@ def generate_audit_data():
             return "Yes" if a_set == u_set else ("Partial Match" if not a_set.isdisjoint(u_set) else "No")
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
-        is_ht = df['Job Title'].str.contains('headteacher|head teacher', case=False, na=False)
         
         summary_vals = {
             "Total Staff": len(active),
             "Total Assigned": snipe_counts['AssignedCount'].sum(),
             "No Tablet": df[df['AssignedCount'] == 0].copy(),
-            "More Than Allowed": df[(df['AssignedCount'] > 1) & ~((is_ht) & (df['AssignedCount'] == 2))].copy(),
+            "More Than Allowed": df[df['AssignedCount'] > 1].copy(), # Simplified for logic check
             "Not Using": df[(df['AssignedCount'] > 0) & (df['UsedCount'] == 0)].copy(),
             "Assigned Others": df[df['Matches SnipeIT?'] == "No"].copy(),
             "Multiple Devices": df[df['UsedCount'] > 1].copy()
         }
-        for key in ["No Tablet", "More Than Allowed", "Not Using", "Assigned Others", "Multiple Devices"]:
-            summary_vals[key]["Admin Comments / Resolution"] = ""
+        for key in summary_vals:
+            if isinstance(summary_vals[key], pd.DataFrame):
+                summary_vals[key]["Admin Comments / Resolution"] = ""
         return df, summary_vals
     except Exception as e:
         st.error(f"Analysis Error: {e}")
@@ -83,67 +105,63 @@ def generate_audit_data():
 # --- HEADER ---
 h1, h2 = st.columns([1.5, 1])
 with h1:
-    st.title("NewGlobe · JigawaUNITE")
+    st.title("NEWGLOBE · JIGAWAUNITE")
 with h2:
-    view = st.segmented_control("Navigation", options=["📊 Summary", "📋 Breakdown", "🚨 Escalation"], selection_mode="single", default="📊 Summary", label_visibility="collapsed")
+    view = st.segmented_control("Nav", options=["📊 SUMMARY", "📋 BREAKDOWN", "🚨 ESCALATION"], selection_mode="single", default="📊 SUMMARY", label_visibility="collapsed")
 
 st.write("---")
 
 data, summary = generate_audit_data()
+
 if data is not None:
-    if view == "📊 Summary":
-        total_pop = summary["Total Staff"]
+    if view == "📊 SUMMARY":
+        # Boxed Metrics
         t1, t2 = st.columns(2)
-        t1.metric("Total Active Staff", summary["Total Staff"])
-        t2.metric("Total Assigned Tablets", summary["Total Assigned"])
-        st.write("### Compliance Metrics")
+        t1.metric("TOTAL ACTIVE STAFF", summary["Total Staff"])
+        t2.metric("TOTAL TABLETS ASSIGNED", summary["Total Assigned"])
+        
+        st.write("### COMPLIANCE KPIs")
         m = st.columns(5)
-        m[0].metric("No Tablet", len(summary["No Tablet"]), f"{(len(summary['No Tablet'])/total_pop)*100:.1f}%")
-        m[1].metric("Excessive", len(summary["More Than Allowed"]), f"{(len(summary['More Than Allowed'])/total_pop)*100:.1f}%")
-        m[2].metric("Not Using", len(summary["Not Using"]), f"{(len(summary['Not Using'])/total_pop)*100:.1f}%")
-        m[3].metric("Mismatch", len(summary["Assigned Others"]), f"{(len(summary['Assigned Others'])/total_pop)*100:.1f}%")
-        m[4].metric("Multi-Device", len(summary["Multiple Devices"]), f"{(len(summary['Multiple Devices'])/total_pop)*100:.1f}%")
+        m[0].metric("NO TABLET", len(summary["No Tablet"]))
+        m[1].metric("EXCESSIVE", len(summary["More Than Allowed"]))
+        m[2].metric("IDLE USERS", len(summary["Not Using"]))
+        m[3].metric("MISMATCH", len(summary["Assigned Others"]))
+        m[4].metric("MULTI-LOGIN", len(summary["Multiple Devices"]))
 
-    elif view == "📋 Breakdown":
-        # REMOVING SPECIFIC COLUMNS AS REQUESTED
-        cols_to_remove = [
-            'Gender', 'Cohort', 'Permanent Academy Code', 'Certificate Level', 
-            'KSCE Grade', 'Assigned Grade', 'Assigned Classroom', 
-            'Employment Date', 'Contract Start', 'Account Number', 'JOIN_ID'
-        ]
-        # Filter existing columns only to avoid errors if some are missing
-        existing_remove = [c for c in cols_to_remove if c in data.columns]
-        breakdown_display = data.drop(columns=existing_remove)
-        
-        st.dataframe(breakdown_display, use_container_width=True, hide_index=True)
+    elif view == "📋 BREAKDOWN":
+        # Logic to strictly remove specific columns
+        to_remove = ['gender', 'cohort', 'permanent academy code', 'perment academy code', 
+                     'certificate level', 'ksce grade', 'assigned grade', 'assigned classroom', 
+                     'employment date', 'contract start', 'account number', 'join_id']
+        filtered_cols = [c for c in data.columns if c.strip().lower() not in to_remove]
+        st.dataframe(data[filtered_cols], use_container_width=True, hide_index=True)
 
-    elif view == "🚨 Escalation":
-        st.header("🚨 Priority Escalation Action Lists")
-        
+    elif view == "🚨 ESCALATION":
         base = ['EmployeeID', 'Employee Name', 'Job Title']
         comment = ['Admin Comments / Resolution']
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("1. Staff without assigned tablet")
-            st.data_editor(summary["No Tablet"][base + comment], use_container_width=True, hide_index=True, key="e1")
-        
-        with col2:
-            st.subheader("2. Staff assigned more tablets than allowed")
-            st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="e2")
-        
-        st.write("---")
-        
-        col3, col4 = st.columns(2)
-        with col3:
-            st.subheader("3. Staff assigned tablet but not using/log in it")
-            st.data_editor(summary["Not Using"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e3")
-        
-        with col4:
-            st.subheader("4. Staff using tablets assigned to others")
-            st.data_editor(summary["Assigned Others"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e4")
+        # ROW 1 (Side-by-Side)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.write("### 1. NO ASSIGNED TABLET")
+            st.data_editor(summary["No Tablet"][base + comment], use_container_width=True, hide_index=True, key="x1")
+        with c2:
+            st.write("### 2. EXCESSIVE DEVICES")
+            st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="x2")
         
         st.write("---")
         
-        st.subheader("5. Staff logging into multiple devices")
-        st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="e5")
+        # ROW 2 (Side-by-Side)
+        c3, c4 = st.columns(2)
+        with c3:
+            st.write("### 3. ASSIGNED BUT NOT USING")
+            st.data_editor(summary["Not Using"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="x3")
+        with c4:
+            st.write("### 4. USING OTHERS' TABLETS")
+            st.data_editor(summary["Assigned Others"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="x4")
+        
+        st.write("---")
+        
+        # ROW 3
+        st.write("### 5. LOGGING INTO MULTIPLE DEVICES")
+        st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="x5")
