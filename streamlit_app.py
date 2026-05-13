@@ -4,85 +4,64 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
-# --- DASHBOARD PRO AESTHETICS (Dark Mode & Row-based Navigation) ---
-st.markdown("""
-    <style>
-    /* Dark Theme Base */
-    .stApp { background-color: #020617; color: #F8FAFC; }
-    
-    /* Top Navigation Row Styling */
-    .stSegmentedControl { 
-        display: flex; 
-        justify-content: flex-end; 
-        margin-top: -65px; 
-        gap: 10px;
+# --- CUSTOM VIEW-BASED STYLING ---
+def apply_custom_style(view_name):
+    bg_colors = {
+        "📊 SUMMARY": "#0F172A",     # Midnight Navy
+        "📋 BREAKDOWN": "#020617",   # Onyx Black
+        "🚨 ESCALATION": "#1E293B"    # Dark Slate Gray
     }
+    bg_color = bg_colors.get(view_name, "#020617")
     
-    /* Boxed Metric Cards */
-    div[data-testid="stMetric"] {
-        background-color: #0F172A;
-        border: 1px solid #1E293B;
-        padding: 12px;
-        border-radius: 8px;
-        text-align: center;
-        min-height: 110px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-    
-    /* Metric Label Wrapping & Visibility */
-    [data-testid="stMetricLabel"] { 
-        font-size: 10px !important; 
-        color: #94A3B8 !important; 
-        font-weight: 600 !important; 
-        text-transform: uppercase !important;
-        white-space: normal !important;
-        word-wrap: break-word !important;
-        line-height: 1.2 !important;
-        margin-bottom: 5px !important;
-    }
-    
-    [data-testid="stMetricValue"] { font-size: 22px !important; font-weight: 700 !important; color: #38BDF8; }
+    st.markdown(f"""
+        <style>
+        .stApp {{ background-color: {bg_color}; color: #F8FAFC; transition: background-color 0.5s ease; }}
+        
+        .stSegmentedControl {{ display: flex; justify-content: flex-end; margin-top: -65px; }}
+        
+        /* Boxed Metric Cards with Text Wrapping */
+        div[data-testid="stMetric"] {{
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            min-height: 120px; /* Ensures boxes stay aligned */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }}
+        
+        /* Force Metric Labels to Wrap */
+        [data-testid="stMetricLabel"] {{ 
+            font-size: 10px !important; 
+            color: #94A3B8 !important; 
+            font-weight: 600 !important; 
+            text-transform: uppercase !important;
+            white-space: normal !important; /* Allows wrapping */
+            word-wrap: break-word !important;
+            line-height: 1.2 !important;
+            display: block !important;
+            margin-bottom: 5px !important;
+        }}
 
-    /* Compact Table Text Size */
-    [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stTable {
-        font-size: 11px !important;
-    }
+        [data-testid="stMetricValue"] {{ font-size: 22px !important; font-weight: 700 !important; color: #38BDF8; }}
 
-    /* Titles and Dividers */
-    h1 { color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }
-    h3 { font-size: 0.85rem !important; color: #38BDF8; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; }
-    hr { border-top: 1px solid #1E293B; margin: 1rem 0; }
-    
-    /* Navigation Button Styling - Dark Background for Visibility */
-    div[data-testid="stSegmentedControl"] button {
-        background-color: #1E293B !important; /* Dark background */
-        color: #F8FAFC !important; /* White text */
-        font-size: 11px !important;
-        min-width: 120px;
-        border: 1px solid #334155 !important;
-        padding: 8px 16px !important;
-    }
-    
-    /* Active Navigation Button Highlight */
-    div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
-        background-color: #38BDF8 !important; /* Light blue highlight */
-        color: #020617 !important; /* Dark text for contrast */
-        font-weight: bold !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+        /* Compact Table Text Size */
+        [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stTable {{ font-size: 11px !important; }}
 
-# Helper function for custom view backgrounds
-def apply_view_theme(view_name):
-    themes = {
-        "📊 SUMMARY": "#0F172A",
-        "📋 BREAKDOWN": "#020617",
-        "🚨 ESCALATION": "#1E293B"
-    }
-    bg = themes.get(view_name, "#020617")
-    st.markdown(f"<style>.stApp {{ background-color: {bg}; }}</style>", unsafe_allow_html=True)
+        h1 {{ color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }}
+        h3 {{ font-size: 0.85rem !important; color: #38BDF8; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; }}
+        hr {{ border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 1rem 0; }}
+        
+        div[data-testid="stSegmentedControl"] button {{
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            color: #F8FAFC !important;
+            font-size: 11px !important;
+            min-width: 110px;
+        }}
+        </style>
+        """, unsafe_allow_html=True)
 
 @st.cache_data
 def generate_audit_data():
@@ -138,21 +117,14 @@ def generate_audit_data():
         st.error(f"Analysis Error: {e}")
         return None, None
 
-# --- HEADER & NAVIGATION ---
-h1, h2 = st.columns([2.2, 1.3])
+# --- HEADER ---
+h1, h2 = st.columns([2.5, 1])
 with h1:
     st.title("JIGAWAUNITE:: E-INK Assignment and Usage Digital Audit")
 with h2:
-    # All nav options in one row with icons
-    view = st.segmented_control(
-        "NAV", 
-        options=["📊 SUMMARY", "📋 BREAKDOWN", "🚨 ESCALATION"], 
-        selection_mode="single", 
-        default="📊 SUMMARY", 
-        label_visibility="collapsed"
-    )
+    view = st.segmented_control("NAV", options=["📊 SUMMARY", "📋 BREAKDOWN", "🚨 ESCALATION"], selection_mode="single", default="📊 SUMMARY", label_visibility="collapsed")
 
-apply_view_theme(view)
+apply_custom_style(view)
 st.write("---")
 
 data, summary = generate_audit_data()
@@ -177,15 +149,10 @@ if data is not None:
         kpi_box(m[1], "STAFF WITH EXCESSIVE DEVICES THAN ALLOWED", summary["More Than Allowed"])
         kpi_box(m[2], "STAFF ASSIGNED TABLET BUT NOT USING IT", summary["Not Using"])
         kpi_box(m[3], "STAFF USING OTHERS' TABLETS", summary["Assigned Others"])
-        kpi_box(m[4], "STAFF LOGGING INTO MULTIPLE DEVICES", summary["Multiple Devices"])
+        kpi_box(m[4], "STAFF LOGING INTO MULTIPLE DEVICES", summary["Multiple Devices"])
 
     elif view == "📋 BREAKDOWN":
-        # Specific columns from your requested list
-        breakdown_cols = [
-            'EmployeeID', 'Employee Name', 'Current Academy Code', 'County', 
-            'Job Title', 'Phone Number', 'Tablet ID Assigned', 
-            'AssignedCount', 'Tablet ID Used', 'UsedCount', 'Matches SnipeIT?'
-        ]
+        breakdown_cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'County', 'Job Title', 'Phone Number', 'Tablet ID Assigned', 'AssignedCount', 'Tablet ID Used', 'UsedCount', 'Matches SnipeIT?']
         st.dataframe(data[breakdown_cols], use_container_width=True, hide_index=True)
 
     elif view == "🚨 ESCALATION":
@@ -212,5 +179,5 @@ if data is not None:
         
         st.write("---")
         
-        st.write("### STAFF LOGGING INTO MULTIPLE DEVICES")
+        st.write("### STAFF LOGING INTO MULTIPLE DEVICES")
         st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="e5")
