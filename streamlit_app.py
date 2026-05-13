@@ -4,45 +4,49 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# --- HIGH-END AESTHETIC CSS ---
+# --- PREMIUM AESTHETICS ONLY ---
 st.markdown("""
     <style>
-    /* Main background and font */
+    /* Background and Sidebar */
     .stApp { background-color: #F8FAFC; }
     
     /* Top-Right Navigation Alignment */
-    .stSegmentedControl { display: flex; justify-content: flex-end; margin-top: -60px; }
+    .stSegmentedControl { display: flex; justify-content: flex-end; margin-top: -65px; }
     
-    /* Metric Card Styling */
+    /* Metric Card Professional Styling */
     div[data-testid="stMetric"] {
         background-color: #ffffff;
         border: 1px solid #E2E8F0;
         padding: 15px;
         border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
     [data-testid="stMetricValue"] { font-size: 32px !important; font-weight: 700 !important; color: #1E3A8A; }
-    [data-testid="stMetricLabel"] { font-size: 14px !important; color: #64748B; font-weight: 600; }
+    [data-testid="stMetricLabel"] { font-size: 13px !important; color: #64748B; font-weight: 600; text-transform: uppercase; }
 
-    /* Segmented Control Buttons */
+    /* Segmented Control (Tabs) */
     div[data-testid="stSegmentedControl"] button {
-        border-radius: 8px !important;
-        min-width: 120px;
+        border-radius: 10px !important;
+        min-width: 130px;
         font-weight: 600;
+        border: 1px solid #E2E8F0;
     }
 
-    /* Table Headers */
+    /* Section Headers (Escalation Titles) */
     h3 { 
-        font-size: 1.1rem !important; 
+        font-size: 1rem !important; 
         color: #1E293B; 
         font-weight: 700; 
-        margin-bottom: 10px;
-        border-left: 4px solid #3B82F6;
-        padding-left: 10px;
+        margin-bottom: 12px;
+        border-left: 5px solid #3B82F6;
+        padding-left: 12px;
     }
     
-    /* Clean Divider */
-    hr { margin-top: 1rem; margin-bottom: 1.5rem; border: 0; border-top: 1px solid #E2E8F0; }
+    /* Tables/Editors Styling */
+    .stDataEditor { border: 1px solid #E2E8F0; border-radius: 10px; }
+    
+    /* General Dividers */
+    hr { margin-top: 1rem; margin-bottom: 2rem; border: 0; border-top: 1px solid #E2E8F0; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -73,6 +77,7 @@ def generate_audit_data():
 
         df = pd.merge(active, snipe_final, on='JOIN_ID', how='left')
         df = pd.merge(df, geo_final, on='JOIN_ID', how='left')
+
         df['AssignedCount'] = df['AssignedCount'].fillna(0).astype(int)
         df['UsedCount'] = df['UsedCount'].fillna(0).astype(int)
         
@@ -82,9 +87,11 @@ def generate_audit_data():
             if assigned in ['nan', ''] or used in ['nan', '']: return "No Data"
             a_set, u_set = set([s.strip() for s in assigned.split(',')]), set([s.strip() for s in used.split(',')])
             return "Yes" if a_set == u_set else ("Partial Match" if not a_set.isdisjoint(u_set) else "No")
+
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
         is_ht = df['Job Title'].str.contains('headteacher|head teacher', case=False, na=False)
+        
         summary_vals = {
             "Total Staff": len(active),
             "Total Assigned": snipe_counts['AssignedCount'].sum(),
@@ -94,20 +101,25 @@ def generate_audit_data():
             "Assigned Others": df[df['Matches SnipeIT?'] == "No"].copy(),
             "Multiple Devices": df[df['UsedCount'] > 1].copy()
         }
+        
         for key in ["No Tablet", "More Than Allowed", "Not Using", "Assigned Others", "Multiple Devices"]:
             summary_vals[key]["Admin Comments / Resolution"] = ""
+
         return df, summary_vals
     except Exception as e:
         st.error(f"Analysis Error: {e}")
         return None, None
 
-# --- HEADER ---
-st.title("NewGlobe · JigawaUNITE")
-view = st.segmented_control("Navigation", options=["📊 Summary", "📋 Breakdown", "🚨 Escalation"], selection_mode="single", default="📊 Summary", label_visibility="collapsed")
+# --- HEADER (Title & Nav) ---
+h1, h2 = st.columns([1.5, 1])
+with h1:
+    st.title("NewGlobe · JigawaUNITE")
+with h2:
+    view = st.segmented_control("Navigation", options=["📊 Summary", "📋 Breakdown", "🚨 Escalation"], selection_mode="single", default="📊 Summary", label_visibility="collapsed")
+
 st.write("---")
 
 data, summary = generate_audit_data()
-
 if data is not None:
     total_pop = summary["Total Staff"]
 
@@ -127,29 +139,32 @@ if data is not None:
         st.dataframe(data, use_container_width=True, hide_index=True)
 
     elif view == "🚨 Escalation":
-        common = ['EmployeeID', 'Employee Name', 'Admin Comments / Resolution']
+        st.header("🚨 Priority Escalation Action Lists")
+        base_cols = ['EmployeeID', 'Employee Name'] 
+        comment_col = ['Admin Comments / Resolution']
+
+        # ROW 1
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("1. No Assigned Tablet")
+            st.data_editor(summary["No Tablet"][base_cols + comment_col], use_container_width=True, hide_index=True, key="e1")
+        with col2:
+            st.subheader("2. More Than Allowed")
+            st.data_editor(summary["More Than Allowed"][base_cols + ['AssignedCount'] + comment_col], use_container_width=True, hide_index=True, key="e2")
+
+        st.write("---")
+
+        # ROW 2
+        col3, col4 = st.columns(2)
+        with col3:
+            st.subheader("3. Assigned But Not Using")
+            st.data_editor(summary["Not Using"][base_cols + comment_col], use_container_width=True, hide_index=True, key="e3")
+        with col4:
+            st.subheader("4. Using Others' Tablets")
+            st.data_editor(summary["Assigned Others"][base_cols + comment_col], use_container_width=True, hide_index=True, key="e4")
         
-        # SIDE-BY-SIDE GRID (Lists 1 & 2)
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("### 1. No Assigned Tablet")
-            st.data_editor(summary["No Tablet"][common], use_container_width=True, hide_index=True, key="ed1")
-        with c2:
-            st.write("### 2. Excess Devices")
-            st.data_editor(summary["More Than Allowed"][common + ['AssignedCount']], use_container_width=True, hide_index=True, key="ed2")
-
         st.write("---")
-
-        # SIDE-BY-SIDE GRID (Lists 3 & 4)
-        c3, c4 = st.columns(2)
-        with c3:
-            st.write("### 3. Idle Users (No Log-in)")
-            st.data_editor(summary["Not Using"][common], use_container_width=True, hide_index=True, key="ed3")
-        with c4:
-            st.write("### 4. Assigned to Others")
-            st.data_editor(summary["Assigned Others"][common], use_container_width=True, hide_index=True, key="ed4")
-
-        st.write("---")
-
-        st.write("### 5. Logging into Multiple Devices")
-        st.data_editor(summary["Multiple Devices"][common + ['UsedCount']], use_container_width=True, hide_index=True, key="ed5")
+        
+        # ROW 3
+        st.subheader("5. Logging into Multiple Devices")
+        st.data_editor(summary["Multiple Devices"][base_cols + ['UsedCount'] + comment_col], use_container_width=True, hide_index=True, key="e5")
