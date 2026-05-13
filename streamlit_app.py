@@ -95,7 +95,6 @@ def render_kpi(label, value, percentage=None):
 @st.cache_data
 def generate_audit_data():
     try:
-        # Loading your 3 specific files
         active = pd.read_excel("Active Staff.xlsx")
         snipe = pd.read_excel("Snipe_IT.xlsx")
         geo = pd.read_excel("Geolocation Sync 07_10 Apr.xlsx")
@@ -103,7 +102,6 @@ def generate_audit_data():
         for df in [active, snipe, geo]:
             df.columns = df.columns.str.strip()
 
-        # Merging logic
         active['JOIN_ID'] = active['EmployeeID'].astype(str).str.strip()
         snipe['JOIN_ID'] = snipe['Username'].astype(str).str.strip()
         geo['JOIN_ID'] = geo['Employee Id'].astype(str).str.strip()
@@ -122,6 +120,21 @@ def generate_audit_data():
         df['AssignedCount'] = df['AssignedCount'].fillna(0).astype(int)
         df['UsedCount'] = df['UsedCount'].fillna(0).astype(int)
         
+        # --- NEW LOGIC FOR HEAD TEACHER COMPLIANCE ---
+        def get_compliance_flags(row):
+            title = str(row.get('Job Title', '')).upper()
+            is_ht = "HEAD TEACHER" in title or "HEADTEACHER" in title
+            count = row['AssignedCount']
+            
+            # Excessive: HT > 2, Others > 1
+            is_excessive = (count > 2) if is_ht else (count > 1)
+            # Missing: HT < 2, Others == 0
+            is_missing = (count < 2) if is_ht else (count == 0)
+            
+            return pd.Series([is_excessive, is_missing])
+
+        df[['Flag_Excessive', 'Flag_Missing']] = df.apply(get_compliance_flags, axis=1)
+
         def check_match(row):
             assigned = str(row.get('Tablet ID Assigned', '')).strip().lower()
             used = str(row.get('Tablet ID Used', '')).strip().lower()
@@ -134,8 +147,8 @@ def generate_audit_data():
         summary_vals = {
             "Total Staff": len(active),
             "Total Assigned": snipe_counts['AssignedCount'].sum(),
-            "No Tablet": df[df['AssignedCount'] == 0].copy(),
-            "More Than Allowed": df[df['AssignedCount'] > 1].copy(),
+            "No Tablet": df[df['Flag_Missing'] == True].copy(),
+            "More Than Allowed": df[df['Flag_Excessive'] == True].copy(),
             "Not Using": df[(df['AssignedCount'] > 0) & (df['UsedCount'] == 0)].copy(),
             "Assigned Others": df[df['Matches SnipeIT?'] == "No"].copy(),
             "Multiple Devices": df[df['UsedCount'] > 1].copy()
@@ -198,7 +211,7 @@ if data is not None:
         e1, e2 = st.columns(2)
         with e1:
             st.write("### STAFF WITHOUT ASSIGNED TABLET")
-            st.data_editor(summary["No Tablet"][base + comment], use_container_width=True, hide_index=True, key="x1")
+            st.data_editor(summary["No Tablet"][base + ['AssignedCount'] + comment], use_container_width=True, hide_index=True, key="x1")
         with e2:
             st.write("### STAFF WITH EXCESSIVE DEVICES THAN ALLOWED")
             st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="x2")
