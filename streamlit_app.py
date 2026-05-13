@@ -4,77 +4,79 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
-# --- UI THEME REPAIR: NO WHITE BACKGROUNDS, HIGH VISIBILITY ---
+# --- UI THEME: NO WHITE BOXES, HIGH CONTRAST ---
 def apply_view_theme(view_name):
     themes = {
-        "📊 SUMMARY": "#000000",
-        "📋 BREAKDOWN": "#020617",
-        "🚨 ESCALATION": "#111827"
+        "📊 SUMMARY": "#000000",      # Pure Black
+        "📋 BREAKDOWN": "#020617",    # Dark Navy
+        "🚨 ESCALATION": "#0F172A"     # Deep Slate
     }
     bg = themes.get(view_name, "#000000")
     
     st.markdown(f"""
         <style>
-        /* Force Deep Dark Background */
         .stApp {{ background-color: {bg} !important; color: #F8FAFC !important; }}
         
-        /* Navigation Styling: Transparent background, no white boxes */
+        /* Navigation: Force transparent background, remove white containers */
         div[data-testid="stSegmentedControl"] {{ 
             display: flex !important; 
             justify-content: flex-end !important; 
             margin-top: -65px !important; 
-            background-color: transparent !important;
+            background: transparent !important;
         }}
 
-        /* Button Styling */
+        /* Button Styling: Deep Blue with Blue Text */
         div[data-testid="stSegmentedControl"] button {{
-            background-color: #1E293B !important; /* Slate Dark Blue */
-            color: #38BDF8 !important; /* Cyan-Blue Text */
+            background-color: #1E293B !important; 
+            color: #38BDF8 !important; 
             border: 1px solid #334155 !important;
             font-weight: 800 !important;
             min-width: 150px !important;
             text-transform: uppercase;
         }}
 
-        /* Active Button Highlight: Solid Cyan with Black Text */
+        /* Selected Button: Solid Cyan with Black Text (Maximum Visibility) */
         div[data-testid="stSegmentedControl"] button[aria-checked="true"] {{
             background-color: #38BDF8 !important; 
             color: #000000 !important; 
             border: 1px solid #38BDF8 !important;
         }}
 
-        /* KPI Card Styling with Forced Text Wrap */
+        /* Custom KPI Card Styling with Text Wrap */
         .kpi-card {{
-            background-color: #0F172A;
+            background-color: #111827;
             border: 1px solid #1E293B;
-            padding: 15px;
-            border-radius: 10px;
+            padding: 20px;
+            border-radius: 12px;
             text-align: center;
             min-height: 160px;
             display: flex;
             flex-direction: column;
             justify-content: center;
+            margin-bottom: 10px;
         }}
         .kpi-label {{
             font-size: 11px;
             color: #94A3B8;
             font-weight: 700;
             text-transform: uppercase;
-            white-space: normal !important; /* Forces Text Wrapping */
+            white-space: normal !important;
             line-height: 1.4;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }}
-        .kpi-value {{ font-size: 26px; font-weight: 800; color: #38BDF8; }}
+        .kpi-value {{ font-size: 28px; font-weight: 800; color: #38BDF8; }}
+        .kpi-sub {{ font-size: 11px; color: #64748B; margin-top: 5px; }}
         
-        /* Ensure DataFrames are readable */
+        /* Table and Header Text */
         [data-testid="stDataFrame"], [data-testid="stDataEditor"] {{ font-size: 11px !important; }}
-        h3 {{ color: #38BDF8; font-size: 0.9rem !important; margin-top: 20px; }}
+        h1, h3 {{ color: #F8FAFC !important; font-weight: 700 !important; }}
         </style>
     """, unsafe_allow_html=True)
 
 @st.cache_data
 def generate_audit_data():
     try:
+        # Load Files
         active = pd.read_excel("Active Staff.xlsx")
         snipe = pd.read_excel("Snipe_IT.xlsx")
         geo = pd.read_excel("Geolocation Sync 07_10 Apr.xlsx")
@@ -82,28 +84,30 @@ def generate_audit_data():
         for df in [active, snipe, geo]:
             df.columns = df.columns.str.strip()
 
+        # Unify IDs
         active['JOIN_ID'] = active['EmployeeID'].astype(str).str.strip()
         snipe['JOIN_ID'] = snipe['Username'].astype(str).str.strip()
         geo['JOIN_ID'] = geo['Employee Id'].astype(str).str.strip()
 
-        # SnipeIT Merge
+        # SnipeIT Logic (Fixed 'snipe_counts' definition error)
         snipe_serial_col = next((c for c in snipe.columns if 'SERIAL' in c.upper()), None)
-        s_grouped = snipe.groupby('JOIN_ID').agg({snipe_serial_col: lambda x: ', '.join(x.astype(str).unique())}).reset_index()
-        s_counts = snipe.groupby('JOIN_ID').size().reset_index(name='AssignedCount')
-        snipe_final = pd.merge(s_grouped, s_counts, on='JOIN_ID').rename(columns={snipe_serial_col: 'Tablet ID Assigned'})
+        snipe_agg = snipe.groupby('JOIN_ID').agg({snipe_serial_col: lambda x: ', '.join(x.astype(str).unique())}).reset_index()
+        snipe_counts = snipe.groupby('JOIN_ID').size().reset_index(name='AssignedCount')
+        snipe_final = pd.merge(snipe_agg, snipe_counts, on='JOIN_ID').rename(columns={snipe_serial_col: 'Tablet ID Assigned'})
 
-        # Geolocation Merge
-        geo_grouped = geo.groupby('JOIN_ID').agg({'Device Serial': lambda x: ', '.join(x.astype(str).unique())}).reset_index()
-        geo_counts = geo.groupby('JOIN_ID')['Device Serial'].nunique().reset_index(name='UsedCount')
-        geo_final = pd.merge(geo_grouped, geo_counts, on='JOIN_ID').rename(columns={'Device Serial': 'Tablet ID Used'})
+        # Geo Logic
+        geo_agg = geo.groupby('JOIN_ID').agg({'Device Serial': lambda x: ', '.join(x.astype(str).unique())}).reset_index()
+        geo_counts_df = geo.groupby('JOIN_ID')['Device Serial'].nunique().reset_index(name='UsedCount')
+        geo_final = pd.merge(geo_agg, geo_counts_df, on='JOIN_ID').rename(columns={'Device Serial': 'Tablet ID Used'})
 
+        # Master Merge
         df = pd.merge(active, snipe_final, on='JOIN_ID', how='left')
         df = pd.merge(df, geo_final, on='JOIN_ID', how='left')
         df['AssignedCount'] = df['AssignedCount'].fillna(0).astype(int)
         df['UsedCount'] = df['UsedCount'].fillna(0).astype(int)
         
-        # --- LOGIC: EXCLUDE HEADTEACHERS FROM EXCESSIVE DEVICES ---
-        # Flag only if count > 1 AND job title is not 'Headteacher'
+        # --- Headteacher Exclusion Logic ---
+        # Flag ONLY if (Count > 1) AND (Job Title is NOT Headteacher)
         excessive_mask = (df['AssignedCount'] > 1) & (~df['Job Title'].str.contains('Headteacher', case=False, na=False))
         
         def check_match(row):
@@ -115,11 +119,12 @@ def generate_audit_data():
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
         
+        # Pre-calculating summary metrics
         summary_vals = {
             "Total Staff": len(active),
-            "Total Assigned": snipe_counts['AssignedCount'].sum(),
+            "Total Assigned": int(snipe_counts['AssignedCount'].sum()),
             "No Tablet": df[df['AssignedCount'] == 0].copy(),
-            "More Than Allowed": df[excessive_mask].copy(), # Excludes Headteachers
+            "More Than Allowed": df[excessive_mask].copy(), # Headteachers excluded
             "Not Using": df[(df['AssignedCount'] > 0) & (df['UsedCount'] == 0)].copy(),
             "Assigned Others": df[df['Matches SnipeIT?'] == "No"].copy(),
             "Multiple Devices": df[df['UsedCount'] > 1].copy()
@@ -129,7 +134,7 @@ def generate_audit_data():
         st.error(f"Analysis Error: {e}")
         return None, None
 
-# --- UI RENDER ---
+# --- HEADER & NAVIGATION ---
 h1, h2 = st.columns([2.2, 1.8])
 with h1: st.title("JIGAWAUNITE:: E-INK Digital Audit")
 with h2: view = st.segmented_control("NAV", options=["📊 SUMMARY", "📋 BREAKDOWN", "🚨 ESCALATION"], selection_mode="single", default="📊 SUMMARY", label_visibility="collapsed")
@@ -143,12 +148,10 @@ if data is not None:
     total_pop = summary["Total Staff"]
 
     if view == "📊 SUMMARY":
-        # Row 1: Totals
         c1, c2 = st.columns(2)
         with c1: st.markdown(f'<div class="kpi-card"><div class="kpi-label">TOTAL ACTIVE STAFF</div><div class="kpi-value">{summary["Total Staff"]:,}</div></div>', unsafe_allow_html=True)
         with c2: st.markdown(f'<div class="kpi-card"><div class="kpi-label">TOTAL TABLETS ASSIGNED</div><div class="kpi-value">{summary["Total Assigned"]:,}</div></div>', unsafe_allow_html=True)
         
-        # Row 2: Non-Compliance
         st.write("### NON-COMPLIANCE SUMMARY")
         m = st.columns(5)
         labels = ["STAFF WITHOUT ASSIGNED TABLET", "STAFF WITH EXCESSIVE DEVICES THAN ALLOWED", "STAFF ASSIGNED TABLET BUT NOT USING IT", "STAFF USING OTHERS' TABLETS", "STAFF LOGING INTO MULTIPLE DEVICES"]
@@ -158,16 +161,21 @@ if data is not None:
             count = len(summary[keys[i]])
             perc = f"{(count / total_pop) * 100:.1f}%"
             with col:
-                st.markdown(f'<div class="kpi-card"><div class="kpi-label">{labels[i]}</div><div class="kpi-value">{count}</div><div style="font-size:11px; color:#64748B;">{perc} Staff</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="kpi-card"><div class="kpi-label">{labels[i]}</div><div class="kpi-value">{count}</div><div class="kpi-sub">{perc} Staff</div></div>', unsafe_allow_html=True)
 
     elif view == "📋 BREAKDOWN":
-        cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'County', 'Job Title', 'Tablet ID Assigned', 'AssignedCount', 'Tablet ID Used', 'UsedCount', 'Matches SnipeIT?']
+        cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title', 'Tablet ID Assigned', 'AssignedCount', 'Tablet ID Used', 'UsedCount', 'Matches SnipeIT?']
         st.dataframe(data[cols], use_container_width=True, hide_index=True)
 
     elif view == "🚨 ESCALATION":
         base = ['EmployeeID', 'Employee Name', 'Job Title']
+        
         st.write("### STAFF WITHOUT ASSIGNED TABLET")
         st.data_editor(summary["No Tablet"][base], use_container_width=True, hide_index=True)
         
         st.write("### STAFF WITH EXCESSIVE DEVICES THAN ALLOWED (EXCLUDES HEADTEACHERS)")
-        st.data_editor(summary["More Than Allowed"][base + ['AssignedCount']], use_container_width=True, hide_index=True)
+        st.data_editor(summary["More Than Allowed"][base + ['AssignedCount', 'Tablet ID Assigned']], use_container_width=True, hide_index=True)
+        
+        st.write("---")
+        st.write("### STAFF ASSIGNED TABLET BUT NOT USING IT")
+        st.data_editor(summary["Not Using"][base + ['Tablet ID Assigned']], use_container_width=True, hide_index=True)
