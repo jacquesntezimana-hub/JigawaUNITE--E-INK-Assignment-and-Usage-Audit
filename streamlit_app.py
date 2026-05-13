@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 # 1. Page Configuration
-st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
+st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
 # --- DASHBOARD PRO AESTHETICS (Dark Mode & Compact Text) ---
 st.markdown("""
@@ -30,7 +30,7 @@ st.markdown("""
     }
 
     /* Titles and Dividers */
-    h1 { color: #F8FAFC; font-size: 20px !important; letter-spacing: 1px; }
+    h1 { color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }
     h3 { font-size: 0.85rem !important; color: #38BDF8; margin-bottom: 8px; font-weight: 600; }
     hr { border-top: 1px solid #1E293B; margin: 1rem 0; }
     
@@ -100,9 +100,9 @@ def generate_audit_data():
         return None, None
 
 # --- HEADER ---
-h1, h2 = st.columns([1.5, 1])
+h1, h2 = st.columns([2, 1])
 with h1:
-    st.title("NEWGLOBE · JIGAWAUNITE")
+    st.title("JIGAWAUNITE:: E-INK Assignment and Usage Digital Audit")
 with h2:
     view = st.segmented_control("NAV", options=["📊 SUMMARY", "📋 BREAKDOWN", "🚨 ESCALATION"], selection_mode="single", default="📊 SUMMARY", label_visibility="collapsed")
 
@@ -125,7 +125,7 @@ if data is not None:
         m[4].metric("MULTI-LOGIN", len(summary["Multiple Devices"]))
 
     elif view == "📋 BREAKDOWN":
-        # EXPLICIT COLUMN LIST
+        # EXPLICIT COLUMN LIST MAINTAINED
         breakdown_cols = [
             'EmployeeID', 'Employee Name', 'Current Academy Code', 'County', 
             'Job Title', 'Phone Number', 'Tablet ID Assigned', 
