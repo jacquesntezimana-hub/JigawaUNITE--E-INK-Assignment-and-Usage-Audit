@@ -4,16 +4,11 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# --- PREMIUM AESTHETICS ONLY ---
+# --- PREMIUM AESTHETICS (Visuals Only) ---
 st.markdown("""
     <style>
-    /* Background and Sidebar */
     .stApp { background-color: #F8FAFC; }
-    
-    /* Top-Right Navigation Alignment */
     .stSegmentedControl { display: flex; justify-content: flex-end; margin-top: -65px; }
-    
-    /* Metric Card Professional Styling */
     div[data-testid="stMetric"] {
         background-color: #ffffff;
         border: 1px solid #E2E8F0;
@@ -23,30 +18,9 @@ st.markdown("""
     }
     [data-testid="stMetricValue"] { font-size: 32px !important; font-weight: 700 !important; color: #1E3A8A; }
     [data-testid="stMetricLabel"] { font-size: 13px !important; color: #64748B; font-weight: 600; text-transform: uppercase; }
-
-    /* Segmented Control (Tabs) */
-    div[data-testid="stSegmentedControl"] button {
-        border-radius: 10px !important;
-        min-width: 130px;
-        font-weight: 600;
-        border: 1px solid #E2E8F0;
-    }
-
-    /* Section Headers (Escalation Titles) */
-    h3 { 
-        font-size: 1rem !important; 
-        color: #1E293B; 
-        font-weight: 700; 
-        margin-bottom: 12px;
-        border-left: 5px solid #3B82F6;
-        padding-left: 12px;
-    }
-    
-    /* Tables/Editors Styling */
-    .stDataEditor { border: 1px solid #E2E8F0; border-radius: 10px; }
-    
-    /* General Dividers */
-    hr { margin-top: 1rem; margin-bottom: 2rem; border: 0; border-top: 1px solid #E2E8F0; }
+    div[data-testid="stSegmentedControl"] button { border-radius: 10px !important; min-width: 130px; font-weight: 600; }
+    h3 { font-size: 1rem !important; color: #1E293B; font-weight: 700; border-left: 5px solid #3B82F6; padding-left: 12px; margin-bottom: 12px; }
+    hr { border-top: 1px solid #E2E8F0; margin-top: 1rem; margin-bottom: 2rem; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -77,7 +51,6 @@ def generate_audit_data():
 
         df = pd.merge(active, snipe_final, on='JOIN_ID', how='left')
         df = pd.merge(df, geo_final, on='JOIN_ID', how='left')
-
         df['AssignedCount'] = df['AssignedCount'].fillna(0).astype(int)
         df['UsedCount'] = df['UsedCount'].fillna(0).astype(int)
         
@@ -89,7 +62,6 @@ def generate_audit_data():
             return "Yes" if a_set == u_set else ("Partial Match" if not a_set.isdisjoint(u_set) else "No")
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
-
         is_ht = df['Job Title'].str.contains('headteacher|head teacher', case=False, na=False)
         
         summary_vals = {
@@ -101,16 +73,14 @@ def generate_audit_data():
             "Assigned Others": df[df['Matches SnipeIT?'] == "No"].copy(),
             "Multiple Devices": df[df['UsedCount'] > 1].copy()
         }
-        
         for key in ["No Tablet", "More Than Allowed", "Not Using", "Assigned Others", "Multiple Devices"]:
             summary_vals[key]["Admin Comments / Resolution"] = ""
-
         return df, summary_vals
     except Exception as e:
         st.error(f"Analysis Error: {e}")
         return None, None
 
-# --- HEADER (Title & Nav) ---
+# --- HEADER ---
 h1, h2 = st.columns([1.5, 1])
 with h1:
     st.title("NewGlobe · JigawaUNITE")
@@ -121,9 +91,8 @@ st.write("---")
 
 data, summary = generate_audit_data()
 if data is not None:
-    total_pop = summary["Total Staff"]
-
     if view == "📊 Summary":
+        total_pop = summary["Total Staff"]
         t1, t2 = st.columns(2)
         t1.metric("Total Active Staff", summary["Total Staff"])
         t2.metric("Total Assigned Tablets", summary["Total Assigned"])
@@ -140,31 +109,24 @@ if data is not None:
 
     elif view == "🚨 Escalation":
         st.header("🚨 Priority Escalation Action Lists")
-        base_cols = ['EmployeeID', 'Employee Name'] 
-        comment_col = ['Admin Comments / Resolution']
+        # RESTORED YOUR EXACT COLUMNS
+        common = ['EmployeeID', 'Employee Name', 'Job Title', 'Admin Comments / Resolution']
 
-        # ROW 1
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("1. No Assigned Tablet")
-            st.data_editor(summary["No Tablet"][base_cols + comment_col], use_container_width=True, hide_index=True, key="e1")
+            st.subheader("1. Staff without assigned tablet")
+            st.data_editor(summary["No Tablet"][common], use_container_width=True, hide_index=True, key="e1")
         with col2:
-            st.subheader("2. More Than Allowed")
-            st.data_editor(summary["More Than Allowed"][base_cols + ['AssignedCount'] + comment_col], use_container_width=True, hide_index=True, key="e2")
-
+            st.subheader("2. Staff assigned more tablets than allowed")
+            st.data_editor(summary["More Than Allowed"][common + ['AssignedCount']], use_container_width=True, hide_index=True, key="e2")
         st.write("---")
-
-        # ROW 2
         col3, col4 = st.columns(2)
         with col3:
-            st.subheader("3. Assigned But Not Using")
-            st.data_editor(summary["Not Using"][base_cols + comment_col], use_container_width=True, hide_index=True, key="e3")
+            st.subheader("3. Staff assigned tablet but not using/log in it")
+            st.data_editor(summary["Not Using"][common + ['Tablet ID Assigned']], use_container_width=True, hide_index=True, key="e3")
         with col4:
-            st.subheader("4. Using Others' Tablets")
-            st.data_editor(summary["Assigned Others"][base_cols + comment_col], use_container_width=True, hide_index=True, key="e4")
-        
+            st.subheader("4. Staff using tablets assigned to others")
+            st.data_editor(summary["Assigned Others"][common + ['Tablet ID Assigned', 'Tablet ID Used']], use_container_width=True, hide_index=True, key="e4")
         st.write("---")
-        
-        # ROW 3
-        st.subheader("5. Logging into Multiple Devices")
-        st.data_editor(summary["Multiple Devices"][base_cols + ['UsedCount'] + comment_col], use_container_width=True, hide_index=True, key="e5")
+        st.subheader("5. Staff logging into multiple devices")
+        st.data_editor(summary["Multiple Devices"][common + ['UsedCount']], use_container_width=True, hide_index=True, key="e5")
