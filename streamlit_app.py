@@ -4,12 +4,31 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# Custom CSS for NewGlobe Style
+# 2. Advanced Custom CSS for the "Professional Look"
 st.markdown("""
     <style>
-    [data-testid="stMetricValue"] { font-size: 30px; font-weight: bold; color: #1E3A8A; }
-    .stSegmentedControl { display: flex; justify-content: flex-end; }
-    div[data-testid="stSegmentedControl"] button { min-width: 130px; border-radius: 20px; }
+    /* Dark Theme background for the whole app */
+    .main { background-color: #0e1117; }
+    
+    /* Top-right Navigation Styling */
+    .stSegmentedControl { display: flex; justify-content: flex-end; padding-top: 10px; }
+    div[data-testid="stSegmentedControl"] button { 
+        background-color: #1f2937; color: white; border-radius: 8px; border: 1px solid #374151;
+    }
+    div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
+        background-color: #3b82f6 !important; border-color: #3b82f6;
+    }
+
+    /* Metric Card Styling */
+    [data-testid="stMetricValue"] { font-size: 36px; font-weight: 800; color: #fbbf24; }
+    [data-testid="stMetricLabel"] { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; }
+    
+    /* Data Editor / Table Styling */
+    .stDataFrame { border: 1px solid #374151; border-radius: 12px; }
+    
+    /* Section Headers */
+    h1, h2, h3 { color: #f3f4f6; font-family: 'Inter', sans-serif; }
+    hr { border-top: 1px solid #374151; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -47,50 +66,43 @@ def generate_audit_data():
         df['AssignedCount'] = df['AssignedCount'].fillna(0).astype(int)
         df['UsedCount'] = df['UsedCount'].fillna(0).astype(int)
         
-        # Match Logic
+        # Matches logic
         def check_match(row):
             assigned = str(row.get('Tablet ID Assigned', '')).strip().lower()
             used = str(row.get('Tablet ID Used', '')).strip().lower()
             if assigned in ['nan', ''] or used in ['nan', '']: return "No Data"
             a_set, u_set = set([s.strip() for s in assigned.split(',')]), set([s.strip() for s in used.split(',')])
             return "Yes" if a_set == u_set else ("Partial Match" if not a_set.isdisjoint(u_set) else "No")
-
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
-        # Headteacher Exception Logic
+        # Filters with Headteacher Exception
         is_ht = df['Job Title'].str.contains('headteacher|head teacher', case=False, na=False)
         
         summary_vals = {
             "Total Staff": len(active),
-            "Total Assigned": snipe_counts['AssignedCount'].sum(),
             "No Tablet": df[df['AssignedCount'] == 0].copy(),
             "More Than Allowed": df[(df['AssignedCount'] > 1) & ~((is_ht) & (df['AssignedCount'] == 2))].copy(),
             "Not Using": df[(df['AssignedCount'] > 0) & (df['UsedCount'] == 0)].copy(),
             "Assigned Others": df[df['Matches SnipeIT?'] == "No"].copy(),
             "Multiple Devices": df[df['UsedCount'] > 1].copy()
         }
-        
-        # Initialize Comment Column for all lists
         for key in summary_vals:
             if isinstance(summary_vals[key], pd.DataFrame):
                 summary_vals[key]["Admin Comments / Resolution"] = ""
-
         return df, summary_vals
     except Exception as e:
-        st.error(f"Analysis Error: {e}")
+        st.error(f"Setup Error: {e}")
         return None, None
 
-# --- HEADER SECTION ---
-h1, h2 = st.columns([1.5, 1])
-with h1:
+# --- TOP ROW (Title and Right Navigation) ---
+h_left, h_right = st.columns([1.5, 1])
+with h_left:
     st.title("NewGlobe · JigawaUNITE")
-with h2:
+    st.caption("Operational Health & Geolocation Compliance Audit")
+with h_right:
     view = st.segmented_control(
-        "Navigation", 
-        options=["📊 Summary", "📋 Breakdown", "🚨 Escalation"], 
-        selection_mode="single", 
-        default="📊 Summary",
-        label_visibility="collapsed"
+        "Menu", options=["Summary", "Breakdown", "Escalation"], 
+        selection_mode="single", default="Summary", label_visibility="collapsed"
     )
 
 st.write("---")
@@ -98,43 +110,37 @@ st.write("---")
 data, summary = generate_audit_data()
 
 if data is not None:
-    total_pop = summary["Total Staff"]
-
-    if view == "📊 Summary":
-        t1, t2 = st.columns(2)
-        t1.metric("Total Active Staff", summary["Total Staff"])
-        t2.metric("Total Number of Assigned Tablets", summary["Total Assigned"])
-        st.write("### Compliance Metrics")
+    if view == "Summary":
+        # Metric Grid
         m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Staff without assigned tablet", len(summary["No Tablet"]), f"{(len(summary['No Tablet'])/total_pop)*100:.1f}%")
-        m2.metric("Staff assigned more tablets than allowed", len(summary["More Than Allowed"]), f"{(len(summary['More Than Allowed'])/total_pop)*100:.1f}%")
-        m3.metric("Staff assigned tablet but not using/log in it", len(summary["Not Using"]), f"{(len(summary['Not Using'])/total_pop)*100:.1f}%")
-        m4.metric("Staff using tablets assigned to others", len(summary["Assigned Others"]), f"{(len(summary['Assigned Others'])/total_pop)*100:.1f}%")
-        m5.metric("Staff logging into multiple devices", len(summary["Multiple Devices"]), f"{(len(summary['Multiple Devices'])/total_pop)*100:.1f}%")
+        m1.metric("No Assigned Tablet", len(summary["No Tablet"]))
+        m2.metric("Excess Devices", len(summary["More Than Allowed"]))
+        m3.metric("Assigned but Idle", len(summary["Not Using"]))
+        m4.metric("Non-Compliant ID", len(summary["Assigned Others"]))
+        m5.metric("Multiple Logins", len(summary["Multiple Devices"]))
 
-    elif view == "📋 Breakdown":
-        st.subheader("Detailed Audit List")
+    elif view == "Breakdown":
         st.dataframe(data, use_container_width=True, hide_index=True)
 
-    elif view == "🚨 Escalation":
-        st.header("🚨 Priority Escalation Action Lists")
-        st.info("💡 Edit the 'Admin Comments' column below to record findings during follow-ups.")
+    elif view == "Escalation":
+        st.subheader("🚨 Priority Action Items")
+        cols = ['EmployeeID', 'Employee Name', 'Admin Comments / Resolution']
         
-        # Define common base columns
-        base_cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title']
-        comment_col = ['Admin Comments / Resolution']
+        # Side-by-Side Rows
+        r1_c1, r1_c2 = st.columns(2)
+        with r1_c1:
+            st.write("### 1. Missing Tablets")
+            st.data_editor(summary["No Tablet"][cols], use_container_width=True, hide_index=True, key="q1")
+        with r1_c2:
+            st.write("### 2. Excess Devices")
+            st.data_editor(summary["More Than Allowed"][cols], use_container_width=True, hide_index=True, key="q2")
 
-        with st.expander("1. Staff without assigned tablet", expanded=True):
-            st.data_editor(summary["No Tablet"][base_cols + comment_col], use_container_width=True, hide_index=True, key="esc1")
-
-        with st.expander("2. Staff assigned more tablets than allowed", expanded=True):
-            st.data_editor(summary["More Than Allowed"][base_cols + ['AssignedCount'] + comment_col], use_container_width=True, hide_index=True, key="esc2")
-
-        with st.expander("3. Staff assigned tablet but not using/log in it", expanded=True):
-            st.data_editor(summary["Not Using"][base_cols + ['Tablet ID Assigned'] + comment_col], use_container_width=True, hide_index=True, key="esc3")
-
-        with st.expander("4. Staff using tablets assigned to others", expanded=True):
-            st.data_editor(summary["Assigned Others"][base_cols + ['Tablet ID Assigned', 'Tablet ID Used'] + comment_col], use_container_width=True, hide_index=True, key="esc4")
-
-        with st.expander("5. Staff logging into multiple devices", expanded=True):
-            st.data_editor(summary["Multiple Devices"][base_cols + ['UsedCount'] + comment_col], use_container_width=True, hide_index=True, key="esc5")
+        st.write("---")
+        
+        r2_c1, r2_c2 = st.columns(2)
+        with r2_c1:
+            st.write("### 3. Idle Users")
+            st.data_editor(summary["Not Using"][cols], use_container_width=True, hide_index=True, key="q3")
+        with r2_c2:
+            st.write("### 4. ID Mismatches")
+            st.data_editor(summary["Assigned Others"][cols], use_container_width=True, hide_index=True, key="q4")
