@@ -4,7 +4,7 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# --- PREMIUM AESTHETICS (Visuals Only) ---
+# --- PREMIUM AESTHETICS ---
 st.markdown("""
     <style>
     .stApp { background-color: #F8FAFC; }
@@ -109,24 +109,36 @@ if data is not None:
 
     elif view == "🚨 Escalation":
         st.header("🚨 Priority Escalation Action Lists")
-        # RESTORED YOUR EXACT COLUMNS
-        common = ['EmployeeID', 'Employee Name', 'Job Title', 'Admin Comments / Resolution']
+        
+        # Column Definitions
+        base = ['EmployeeID', 'Employee Name', 'Job Title']
+        comment = ['Admin Comments / Resolution']
 
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("1. Staff without assigned tablet")
-            st.data_editor(summary["No Tablet"][common], use_container_width=True, hide_index=True, key="e1")
+            st.data_editor(summary["No Tablet"][base + comment], use_container_width=True, hide_index=True, key="e1")
+        
         with col2:
             st.subheader("2. Staff assigned more tablets than allowed")
-            st.data_editor(summary["More Than Allowed"][common + ['AssignedCount']], use_container_width=True, hide_index=True, key="e2")
+            # Added Tablet ID Assigned per request
+            st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="e2")
+        
         st.write("---")
+        
         col3, col4 = st.columns(2)
         with col3:
             st.subheader("3. Staff assigned tablet but not using/log in it")
-            st.data_editor(summary["Not Using"][common + ['Tablet ID Assigned']], use_container_width=True, hide_index=True, key="e3")
+            # Added Assigned and Used per request
+            st.data_editor(summary["Not Using"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e3")
+        
         with col4:
             st.subheader("4. Staff using tablets assigned to others")
-            st.data_editor(summary["Assigned Others"][common + ['Tablet ID Assigned', 'Tablet ID Used']], use_container_width=True, hide_index=True, key="e4")
+            # Added Assigned and Used per request
+            st.data_editor(summary["Assigned Others"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e4")
+        
         st.write("---")
+        
         st.subheader("5. Staff logging into multiple devices")
-        st.data_editor(summary["Multiple Devices"][common + ['UsedCount']], use_container_width=True, hide_index=True, key="e5")
+        # Added Assigned and Used per request
+        st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="e5")
