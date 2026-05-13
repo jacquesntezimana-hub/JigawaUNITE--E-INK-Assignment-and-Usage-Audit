@@ -4,39 +4,49 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
-# --- DASHBOARD PRO AESTHETICS ---
-st.markdown("""
-    <style>
-    .stApp { background-color: #020617; color: #F8FAFC; }
-    .stSegmentedControl { display: flex; justify-content: flex-end; margin-top: -65px; }
-    
-    /* Boxed Metric Cards */
-    div[data-testid="stMetric"] {
-        background-color: #0F172A;
-        border: 1px solid #1E293B;
-        padding: 12px;
-        border-radius: 8px;
-        text-align: center;
+# --- CUSTOM VIEW-BASED STYLING ---
+def apply_custom_style(view_name):
+    # Map views to specific background colors
+    bg_colors = {
+        "📊 SUMMARY": "#0F172A",     # Midnight Navy
+        "📋 BREAKDOWN": "#020617",   # Onyx Black
+        "🚨 ESCALATION": "#1E293B"    # Dark Slate Gray
     }
-    [data-testid="stMetricValue"] { font-size: 22px !important; font-weight: 700 !important; color: #38BDF8; }
-    [data-testid="stMetricLabel"] { font-size: 10px !important; color: #94A3B8; font-weight: 600; text-transform: uppercase; }
-
-    /* Compact Table Text Size */
-    [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stTable { font-size: 11px !important; }
-
-    /* Titles and Dividers */
-    h1 { color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }
-    h3 { font-size: 0.85rem !important; color: #38BDF8; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; }
-    hr { border-top: 1px solid #1E293B; margin: 1rem 0; }
+    bg_color = bg_colors.get(view_name, "#020617")
     
-    div[data-testid="stSegmentedControl"] button {
-        background-color: #1E293B !important;
-        color: #F8FAFC !important;
-        font-size: 11px !important;
-        min-width: 110px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""
+        <style>
+        /* Dynamic Background based on Navigation Selection */
+        .stApp {{ background-color: {bg_color}; color: #F8FAFC; transition: background-color 0.5s ease; }}
+        
+        .stSegmentedControl {{ display: flex; justify-content: flex-end; margin-top: -65px; }}
+        
+        /* Metric Cards */
+        div[data-testid="stMetric"] {{
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        [data-testid="stMetricValue"] {{ font-size: 20px !important; font-weight: 700 !important; color: #38BDF8; }}
+        [data-testid="stMetricLabel"] {{ font-size: 9px !important; color: #94A3B8; font-weight: 600; text-transform: uppercase; }}
+
+        /* Compact Table Text Size */
+        [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stTable {{ font-size: 11px !important; }}
+
+        h1 {{ color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }}
+        h3 {{ font-size: 0.85rem !important; color: #38BDF8; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; }}
+        hr {{ border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 1rem 0; }}
+        
+        div[data-testid="stSegmentedControl"] button {{
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            color: #F8FAFC !important;
+            font-size: 11px !important;
+            min-width: 110px;
+        }}
+        </style>
+        """, unsafe_allow_html=True)
 
 @st.cache_data
 def generate_audit_data():
@@ -94,11 +104,14 @@ def generate_audit_data():
         return None, None
 
 # --- HEADER ---
-h1, h2 = st.columns([2, 1])
+h1, h2 = st.columns([2.5, 1])
 with h1:
     st.title("JIGAWAUNITE:: E-INK Assignment and Usage Digital Audit")
 with h2:
     view = st.segmented_control("NAV", options=["📊 SUMMARY", "📋 BREAKDOWN", "🚨 ESCALATION"], selection_mode="single", default="📊 SUMMARY", label_visibility="collapsed")
+
+# Apply the background color based on selected view
+apply_custom_style(view)
 
 st.write("---")
 
@@ -115,17 +128,16 @@ if data is not None:
         st.write("### NON-COMPLIANCE SUMMARY")
         m = st.columns(5)
         
-        # Helper to format metric with percentage
         def kpi_box(col, label, df):
             count = len(df)
             perc = (count / total_pop) * 100 if total_pop > 0 else 0
-            col.metric(label, f"{count:,}", f"{perc:.1f}% of Staff", delta_color="inverse")
+            col.metric(label, f"{count:,}", f"{perc:.1f}% Staff", delta_color="inverse")
 
-        kpi_box(m[0], "1. NO ASSIGNED TABLET", summary["No Tablet"])
-        kpi_box(m[1], "2. EXCESSIVE DEVICES", summary["More Than Allowed"])
-        kpi_box(m[2], "3. ASSIGNED BUT NOT USING", summary["Not Using"])
-        kpi_box(m[3], "4. USING OTHERS' TABLETS", summary["Assigned Others"])
-        kpi_box(m[4], "5. MULTIPLE DEVICES", summary["Multiple Devices"])
+        kpi_box(m[0], "STAFF WITHOUT ASSIGNED TABLET", summary["No Tablet"])
+        kpi_box(m[1], "STAFF WITH EXCESSIVE DEVICES THAN ALLOWED", summary["More Than Allowed"])
+        kpi_box(m[2], "STAFF ASSIGNED TABLET BUT NOT USING IT", summary["Not Using"])
+        kpi_box(m[3], "STAFF USING OTHERS' TABLETS", summary["Assigned Others"])
+        kpi_box(m[4], "STAFF LOGING INTO MULTIPLE DEVICES", summary["Multiple Devices"])
 
     elif view == "📋 BREAKDOWN":
         breakdown_cols = [
@@ -141,23 +153,23 @@ if data is not None:
 
         c1, c2 = st.columns(2)
         with c1:
-            st.write("### 1. STAFF WITHOUT ASSIGNED TABLET")
+            st.write("### STAFF WITHOUT ASSIGNED TABLET")
             st.data_editor(summary["No Tablet"][base + comment], use_container_width=True, hide_index=True, key="e1")
         with c2:
-            st.write("### 2. STAFF ASSIGNED MORE TABLETS THAN ALLOWED")
+            st.write("### STAFF WITH EXCESSIVE DEVICES THAN ALLOWED")
             st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="e2")
         
         st.write("---")
         
         c3, c4 = st.columns(2)
         with c3:
-            st.write("### 3. ASSIGNED TABLET BUT NOT USING")
+            st.write("### STAFF ASSIGNED TABLET BUT NOT USING IT")
             st.data_editor(summary["Not Using"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e3")
         with c4:
-            st.write("### 4. USING TABLETS ASSIGNED TO OTHERS")
+            st.write("### STAFF USING OTHERS' TABLETS")
             st.data_editor(summary["Assigned Others"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e4")
         
         st.write("---")
         
-        st.write("### 5. STAFF LOGGING INTO MULTIPLE DEVICES")
+        st.write("### STAFF LOGING INTO MULTIPLE DEVICES")
         st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="e5")
