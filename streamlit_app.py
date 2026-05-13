@@ -4,64 +4,86 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
-# --- CUSTOM VIEW-BASED STYLING ---
-def apply_custom_style(view_name):
-    bg_colors = {
-        "📊 SUMMARY": "#0F172A",     # Midnight Navy
-        "📋 BREAKDOWN": "#020617",   # Onyx Black
-        "🚨 ESCALATION": "#1E293B"    # Dark Slate Gray
-    }
-    bg_color = bg_colors.get(view_name, "#020617")
+# --- ADVANCED UI FIXES: FORCED TEXT WRAPPING & VISIBILITY ---
+st.markdown("""
+    <style>
+    /* 1. Overall Theme */
+    .stApp { background-color: #020617 !important; color: #F8FAFC !important; }
     
+    /* 2. Navigation Styling (Single Row, High Contrast) */
+    div[data-testid="stSegmentedControl"] { 
+        display: flex !important; 
+        flex-direction: row !important;
+        justify-content: flex-end !important; 
+        margin-top: -65px !important; 
+        gap: 5px !important;
+    }
+    div[data-testid="stSegmentedControl"] button {
+        background-color: #1E293B !important; 
+        color: #F8FAFC !important; 
+        border: 1px solid #334155 !important;
+        font-size: 11px !important;
+        padding: 8px 15px !important;
+        min-width: 130px !important;
+    }
+    div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
+        background-color: #38BDF8 !important; 
+        color: #020617 !important; 
+    }
+
+    /* 3. Custom KPI Card (Replaces st.metric for better wrapping) */
+    .kpi-card {
+        background-color: #0F172A;
+        border: 1px solid #1E293B;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .kpi-label {
+        font-size: 11px;
+        color: #94A3B8;
+        font-weight: 600;
+        text-transform: uppercase;
+        line-height: 1.3;
+        margin-bottom: 8px;
+        word-wrap: break-word;
+        white-space: normal; /* Force Wrapping */
+    }
+    .kpi-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #38BDF8;
+    }
+    .kpi-perc {
+        font-size: 12px;
+        color: #64748B;
+        margin-top: 4px;
+    }
+
+    /* 4. Table and Header Adjustments */
+    [data-testid="stDataFrame"], [data-testid="stDataEditor"] { font-size: 11px !important; }
+    h1 { color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }
+    h3 { font-size: 0.9rem !important; color: #38BDF8; margin-top: 20px; text-transform: uppercase; font-weight: 700; }
+    hr { border-top: 1px solid #1E293B; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Function to render the custom KPI card
+def render_kpi(label, value, percentage=None):
+    perc_html = f"<div class='kpi-perc'>{percentage} Staff</div>" if percentage else ""
     st.markdown(f"""
-        <style>
-        .stApp {{ background-color: {bg_color}; color: #F8FAFC; transition: background-color 0.5s ease; }}
-        
-        .stSegmentedControl {{ display: flex; justify-content: flex-end; margin-top: -65px; }}
-        
-        /* Boxed Metric Cards with Text Wrapping */
-        div[data-testid="stMetric"] {{
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 12px;
-            border-radius: 8px;
-            text-align: center;
-            min-height: 120px; /* Ensures boxes stay aligned */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }}
-        
-        /* Force Metric Labels to Wrap */
-        [data-testid="stMetricLabel"] {{ 
-            font-size: 10px !important; 
-            color: #94A3B8 !important; 
-            font-weight: 600 !important; 
-            text-transform: uppercase !important;
-            white-space: normal !important; /* Allows wrapping */
-            word-wrap: break-word !important;
-            line-height: 1.2 !important;
-            display: block !important;
-            margin-bottom: 5px !important;
-        }}
-
-        [data-testid="stMetricValue"] {{ font-size: 22px !important; font-weight: 700 !important; color: #38BDF8; }}
-
-        /* Compact Table Text Size */
-        [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stTable {{ font-size: 11px !important; }}
-
-        h1 {{ color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }}
-        h3 {{ font-size: 0.85rem !important; color: #38BDF8; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; }}
-        hr {{ border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 1rem 0; }}
-        
-        div[data-testid="stSegmentedControl"] button {{
-            background-color: rgba(255, 255, 255, 0.1) !important;
-            color: #F8FAFC !important;
-            font-size: 11px !important;
-            min-width: 110px;
-        }}
-        </style>
-        """, unsafe_allow_html=True)
+        <div class="kpi-card">
+            <div class="kpi-label">{label}</div>
+            <div class="kpi-value">{value:,}</div>
+            {perc_html}
+        </div>
+    """, unsafe_allow_html=True)
 
 @st.cache_data
 def generate_audit_data():
@@ -78,13 +100,13 @@ def generate_audit_data():
         geo['JOIN_ID'] = geo['Employee Id'].astype(str).str.strip()
 
         snipe_serial_col = next((c for c in snipe.columns if 'SERIAL' in c.upper()), None)
-        snipe_grouped = snipe.groupby('JOIN_ID').agg({snipe_serial_col: lambda x: ', '.join(x.astype(str).unique())}).reset_index()
+        snipe_final = snipe.groupby('JOIN_ID').agg({snipe_serial_col: lambda x: ', '.join(x.astype(str).unique())}).reset_index()
         snipe_counts = snipe.groupby('JOIN_ID').size().reset_index(name='AssignedCount')
-        snipe_final = pd.merge(snipe_grouped, snipe_counts, on='JOIN_ID').rename(columns={snipe_serial_col: 'Tablet ID Assigned'})
+        snipe_final = pd.merge(snipe_final, snipe_counts, on='JOIN_ID').rename(columns={snipe_serial_col: 'Tablet ID Assigned'})
 
-        geo_grouped = geo.groupby('JOIN_ID').agg({'Device Serial': lambda x: ', '.join(x.astype(str).unique())}).reset_index()
+        geo_final = geo.groupby('JOIN_ID').agg({'Device Serial': lambda x: ', '.join(x.astype(str).unique())}).reset_index()
         geo_counts = geo.groupby('JOIN_ID')['Device Serial'].nunique().reset_index(name='UsedCount')
-        geo_final = pd.merge(geo_grouped, geo_counts, on='JOIN_ID').rename(columns={'Device Serial': 'Tablet ID Used'})
+        geo_final = pd.merge(geo_final, geo_counts, on='JOIN_ID').rename(columns={'Device Serial': 'Tablet ID Used'})
 
         df = pd.merge(active, snipe_final, on='JOIN_ID', how='left')
         df = pd.merge(df, geo_final, on='JOIN_ID', how='left')
@@ -117,14 +139,13 @@ def generate_audit_data():
         st.error(f"Analysis Error: {e}")
         return None, None
 
-# --- HEADER ---
-h1, h2 = st.columns([2.5, 1])
+# --- HEADER & NAVIGATION ---
+h1, h2 = st.columns([2.2, 1.8])
 with h1:
     st.title("JIGAWAUNITE:: E-INK Assignment and Usage Digital Audit")
 with h2:
     view = st.segmented_control("NAV", options=["📊 SUMMARY", "📋 BREAKDOWN", "🚨 ESCALATION"], selection_mode="single", default="📊 SUMMARY", label_visibility="collapsed")
 
-apply_custom_style(view)
 st.write("---")
 
 data, summary = generate_audit_data()
@@ -133,17 +154,18 @@ if data is not None:
     total_pop = summary["Total Staff"]
 
     if view == "📊 SUMMARY":
-        t1, t2 = st.columns(2)
-        t1.metric("TOTAL ACTIVE STAFF", f"{total_pop:,}")
-        t2.metric("TOTAL TABLETS ASSIGNED", f"{summary['Total Assigned']:,}")
+        c1, c2 = st.columns(2)
+        with c1: render_kpi("TOTAL ACTIVE STAFF", summary["Total Staff"])
+        with c2: render_kpi("TOTAL TABLETS ASSIGNED", summary["Total Assigned"])
         
         st.write("### NON-COMPLIANCE SUMMARY")
         m = st.columns(5)
         
+        # Wrapped KPI Box Helper
         def kpi_box(col, label, df):
             count = len(df)
-            perc = (count / total_pop) * 100 if total_pop > 0 else 0
-            col.metric(label, f"{count:,}", f"{perc:.1f}% Staff")
+            perc = f"{(count / total_pop) * 100:.1f}%" if total_pop > 0 else "0%"
+            with col: render_kpi(label, count, perc)
 
         kpi_box(m[0], "STAFF WITHOUT ASSIGNED TABLET", summary["No Tablet"])
         kpi_box(m[1], "STAFF WITH EXCESSIVE DEVICES THAN ALLOWED", summary["More Than Allowed"])
@@ -159,25 +181,23 @@ if data is not None:
         base = ['EmployeeID', 'Employee Name', 'Job Title']
         comment = ['Admin Comments / Resolution']
 
-        c1, c2 = st.columns(2)
-        with c1:
+        e1, e2 = st.columns(2)
+        with e1:
             st.write("### STAFF WITHOUT ASSIGNED TABLET")
-            st.data_editor(summary["No Tablet"][base + comment], use_container_width=True, hide_index=True, key="e1")
-        with c2:
+            st.data_editor(summary["No Tablet"][base + comment], use_container_width=True, hide_index=True, key="x1")
+        with e2:
             st.write("### STAFF WITH EXCESSIVE DEVICES THAN ALLOWED")
-            st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="e2")
+            st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="x2")
         
         st.write("---")
-        
-        c3, c4 = st.columns(2)
-        with c3:
+        e3, e4 = st.columns(2)
+        with e3:
             st.write("### STAFF ASSIGNED TABLET BUT NOT USING IT")
-            st.data_editor(summary["Not Using"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e3")
-        with c4:
+            st.data_editor(summary["Not Using"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="x3")
+        with e4:
             st.write("### STAFF USING OTHERS' TABLETS")
-            st.data_editor(summary["Assigned Others"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e4")
+            st.data_editor(summary["Assigned Others"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="x4")
         
         st.write("---")
-        
         st.write("### STAFF LOGING INTO MULTIPLE DEVICES")
-        st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="e5")
+        st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="x5")
