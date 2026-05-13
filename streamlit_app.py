@@ -105,12 +105,21 @@ if data is not None:
         m[4].metric("Multi-Device", len(summary["Multiple Devices"]), f"{(len(summary['Multiple Devices'])/total_pop)*100:.1f}%")
 
     elif view == "📋 Breakdown":
-        st.dataframe(data, use_container_width=True, hide_index=True)
+        # REMOVING SPECIFIC COLUMNS AS REQUESTED
+        cols_to_remove = [
+            'Gender', 'Cohort', 'Permanent Academy Code', 'Certificate Level', 
+            'KSCE Grade', 'Assigned Grade', 'Assigned Classroom', 
+            'Employment Date', 'Contract Start', 'Account Number', 'JOIN_ID'
+        ]
+        # Filter existing columns only to avoid errors if some are missing
+        existing_remove = [c for c in cols_to_remove if c in data.columns]
+        breakdown_display = data.drop(columns=existing_remove)
+        
+        st.dataframe(breakdown_display, use_container_width=True, hide_index=True)
 
     elif view == "🚨 Escalation":
         st.header("🚨 Priority Escalation Action Lists")
         
-        # Column Definitions
         base = ['EmployeeID', 'Employee Name', 'Job Title']
         comment = ['Admin Comments / Resolution']
 
@@ -121,7 +130,6 @@ if data is not None:
         
         with col2:
             st.subheader("2. Staff assigned more tablets than allowed")
-            # Added Tablet ID Assigned per request
             st.data_editor(summary["More Than Allowed"][base + ['Tablet ID Assigned', 'AssignedCount'] + comment], use_container_width=True, hide_index=True, key="e2")
         
         st.write("---")
@@ -129,16 +137,13 @@ if data is not None:
         col3, col4 = st.columns(2)
         with col3:
             st.subheader("3. Staff assigned tablet but not using/log in it")
-            # Added Assigned and Used per request
             st.data_editor(summary["Not Using"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e3")
         
         with col4:
             st.subheader("4. Staff using tablets assigned to others")
-            # Added Assigned and Used per request
             st.data_editor(summary["Assigned Others"][base + ['Tablet ID Assigned', 'Tablet ID Used'] + comment], use_container_width=True, hide_index=True, key="e4")
         
         st.write("---")
         
         st.subheader("5. Staff logging into multiple devices")
-        # Added Assigned and Used per request
         st.data_editor(summary["Multiple Devices"][base + ['Tablet ID Assigned', 'Tablet ID Used', 'UsedCount'] + comment], use_container_width=True, hide_index=True, key="e5")
