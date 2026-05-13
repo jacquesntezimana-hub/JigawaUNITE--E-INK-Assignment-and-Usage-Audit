@@ -4,7 +4,7 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
-# --- UI THEME: FIXED NAVIGATION TEXT COLOR ---
+# --- UI THEME ---
 st.markdown("""
     <style>
     .stApp { background-color: #020617 !important; color: #F8FAFC !important; }
@@ -18,7 +18,7 @@ st.markdown("""
     }
     div[data-testid="stSegmentedControl"] button {
         background-color: #1E293B !important; 
-        color: #F8FAFC !important; /* Forces text to be visible (White) */
+        color: #F8FAFC !important; 
         border: 1px solid #334155 !important;
         font-size: 11px !important;
         padding: 8px 15px !important;
@@ -26,7 +26,7 @@ st.markdown("""
     }
     div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
         background-color: #38BDF8 !important; 
-        color: #020617 !important; /* Dark text when tab is selected */
+        color: #020617 !important; 
     }
 
     .kpi-card {
@@ -116,6 +116,7 @@ def generate_audit_data():
             if assigned in ['nan', ''] or used in ['nan', '']: return "No Data"
             a_set, u_set = set([s.strip() for s in assigned.split(',')]), set([s.strip() for s in used.split(',')])
             return "Yes" if a_set == u_set else ("Partial Match" if not a_set.isdisjoint(u_set) else "No")
+        
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
         summary_vals = {
@@ -145,7 +146,13 @@ st.write("---")
 data, summary = generate_audit_data()
 
 if data is not None:
+    # Column Lists for Views
+    # Note: 'COUNTY' assumed to be a column in your Active Staff file. 
+    display_cols = ['COUNTY', 'EmployeeID', 'Employee Name', 'Job Title', 'AssignedCount', 'UsedCount', 'Tablet ID Assigned', 'Tablet ID Used', 'Matches SnipeIT?']
+    esc_cols = display_cols + ['Admin Comments / Resolution']
+
     total_pop = summary["Total Staff"]
+    
     if view == "📊 SUMMARY":
         c1, c2 = st.columns(2)
         with c1: render_kpi("TOTAL ACTIVE STAFF", summary["Total Staff"])
@@ -153,29 +160,35 @@ if data is not None:
         
         st.write("### NON-COMPLIANCE SUMMARY")
         m = st.columns(5)
-        
         kpi_list = [
             ("STAFF WITHOUT ASSIGNED TABLET", summary["No Tablet"]),
             ("STAFF WITH EXCESSIVE DEVICES THAN ALLOWED", summary["More Than Allowed"]),
             ("STAFF ASSIGNED TABLET BUT NOT USING IT", summary["Not Using"]),
             ("STAFF USING OTHERS' TABLETS", summary["Assigned Others"]),
-            ("STAFF LOGING INTO MULTIPLE DEVICES", summary["Multiple Devices"])
+            ("STAFF LOGGING INTO MULTIPLE DEVICES", summary["Multiple Devices"])
         ]
-        
         for i, (label, df) in enumerate(kpi_list):
             count = len(df)
             perc = f"{(count / total_pop) * 100:.1f}%" if total_pop > 0 else "0%"
             with m[i]: render_kpi(label, count, perc)
 
     elif view == "📋 BREAKDOWN":
-        st.dataframe(data, use_container_width=True, hide_index=True)
+        st.dataframe(data[display_cols], use_container_width=True, hide_index=True)
 
     elif view == "🚨 ESCALATION":
-        base = ['EmployeeID', 'Employee Name', 'Job Title']
-        comment = ['Admin Comments / Resolution']
+        st.write("### 🚨 FULL NON-COMPLIANCE ESCALATION LIST")
         
-        st.write("### STAFF WITH EXCESSIVE DEVICES THAN ALLOWED")
-        st.data_editor(summary["More Than Allowed"][base + ['AssignedCount'] + comment], use_container_width=True, hide_index=True, key="esc_e")
-        st.write("---")
-        st.write("### STAFF WITHOUT ASSIGNED TABLET (INC. HTs WITH < 2)")
-        st.data_editor(summary["No Tablet"][base + ['AssignedCount'] + comment], use_container_width=True, hide_index=True, key="esc_m")
+        st.write("#### 1. STAFF WITHOUT ASSIGNED TABLET (INC. HTs WITH < 2)")
+        st.data_editor(summary["No Tablet"][esc_cols], use_container_width=True, hide_index=True, key="esc_no")
+        
+        st.write("#### 2. STAFF WITH EXCESSIVE DEVICES THAN ALLOWED")
+        st.data_editor(summary["More Than Allowed"][esc_cols], use_container_width=True, hide_index=True, key="esc_exc")
+        
+        st.write("#### 3. STAFF ASSIGNED TABLET BUT NOT USING IT")
+        st.data_editor(summary["Not Using"][esc_cols], use_container_width=True, hide_index=True, key="esc_nu")
+        
+        st.write("#### 4. STAFF USING OTHERS' TABLETS (SERIAL MISMATCH)")
+        st.data_editor(summary["Assigned Others"][esc_cols], use_container_width=True, hide_index=True, key="esc_oth")
+        
+        st.write("#### 5. STAFF LOGGING INTO MULTIPLE DEVICES")
+        st.data_editor(summary["Multiple Devices"][esc_cols], use_container_width=True, hide_index=True, key="esc_mul")
