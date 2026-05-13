@@ -4,13 +4,10 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
-# --- DASHBOARD PRO AESTHETICS (Dark Mode & Compact Text) ---
+# --- DASHBOARD PRO AESTHETICS ---
 st.markdown("""
     <style>
-    /* Dark Theme Base */
     .stApp { background-color: #020617; color: #F8FAFC; }
-    
-    /* Top-Right Navigation */
     .stSegmentedControl { display: flex; justify-content: flex-end; margin-top: -65px; }
     
     /* Boxed Metric Cards */
@@ -21,20 +18,17 @@ st.markdown("""
         border-radius: 8px;
         text-align: center;
     }
-    [data-testid="stMetricValue"] { font-size: 24px !important; font-weight: 700 !important; color: #38BDF8; }
+    [data-testid="stMetricValue"] { font-size: 22px !important; font-weight: 700 !important; color: #38BDF8; }
     [data-testid="stMetricLabel"] { font-size: 10px !important; color: #94A3B8; font-weight: 600; text-transform: uppercase; }
 
     /* Compact Table Text Size */
-    [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stTable {
-        font-size: 11px !important;
-    }
+    [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stTable { font-size: 11px !important; }
 
     /* Titles and Dividers */
     h1 { color: #F8FAFC; font-size: 20px !important; letter-spacing: 0.5px; }
-    h3 { font-size: 0.85rem !important; color: #38BDF8; margin-bottom: 8px; font-weight: 600; }
+    h3 { font-size: 0.85rem !important; color: #38BDF8; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; }
     hr { border-top: 1px solid #1E293B; margin: 1rem 0; }
     
-    /* Segmented Control Styling */
     div[data-testid="stSegmentedControl"] button {
         background-color: #1E293B !important;
         color: #F8FAFC !important;
@@ -111,21 +105,29 @@ st.write("---")
 data, summary = generate_audit_data()
 
 if data is not None:
+    total_pop = summary["Total Staff"]
+
     if view == "📊 SUMMARY":
         t1, t2 = st.columns(2)
-        t1.metric("TOTAL ACTIVE STAFF", summary["Total Staff"])
-        t2.metric("TOTAL TABLETS ASSIGNED", summary["Total Assigned"])
+        t1.metric("TOTAL ACTIVE STAFF", f"{total_pop:,}")
+        t2.metric("TOTAL TABLETS ASSIGNED", f"{summary['Total Assigned']:,}")
         
-        st.write("### COMPLIANCE SUMMARY BOXES")
+        st.write("### NON-COMPLIANCE SUMMARY")
         m = st.columns(5)
-        m[0].metric("NO TABLET", len(summary["No Tablet"]))
-        m[1].metric("EXCESSIVE", len(summary["More Than Allowed"]))
-        m[2].metric("IDLE USERS", len(summary["Not Using"]))
-        m[3].metric("MISMATCH", len(summary["Assigned Others"]))
-        m[4].metric("MULTI-LOGIN", len(summary["Multiple Devices"]))
+        
+        # Helper to format metric with percentage
+        def kpi_box(col, label, df):
+            count = len(df)
+            perc = (count / total_pop) * 100 if total_pop > 0 else 0
+            col.metric(label, f"{count:,}", f"{perc:.1f}% of Staff", delta_color="inverse")
+
+        kpi_box(m[0], "1. NO ASSIGNED TABLET", summary["No Tablet"])
+        kpi_box(m[1], "2. EXCESSIVE DEVICES", summary["More Than Allowed"])
+        kpi_box(m[2], "3. ASSIGNED BUT NOT USING", summary["Not Using"])
+        kpi_box(m[3], "4. USING OTHERS' TABLETS", summary["Assigned Others"])
+        kpi_box(m[4], "5. MULTIPLE DEVICES", summary["Multiple Devices"])
 
     elif view == "📋 BREAKDOWN":
-        # EXPLICIT COLUMN LIST MAINTAINED
         breakdown_cols = [
             'EmployeeID', 'Employee Name', 'Current Academy Code', 'County', 
             'Job Title', 'Phone Number', 'Tablet ID Assigned', 
