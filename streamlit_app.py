@@ -4,7 +4,7 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="JigawaUNITE Audit", layout="wide")
 
-# --- UI THEME: YOUR ORIGINAL CSS ---
+# --- UI THEME: FIXED NAVIGATION TEXT COLOR ---
 st.markdown("""
     <style>
     .stApp { background-color: #020617 !important; color: #F8FAFC !important; }
@@ -18,7 +18,7 @@ st.markdown("""
     }
     div[data-testid="stSegmentedControl"] button {
         background-color: #1E293B !important; 
-        color: #F8FAFC !important; 
+        color: #F8FAFC !important; /* Forces text to be visible (White) */
         border: 1px solid #334155 !important;
         font-size: 11px !important;
         padding: 8px 15px !important;
@@ -26,7 +26,7 @@ st.markdown("""
     }
     div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
         background-color: #38BDF8 !important; 
-        color: #020617 !important; 
+        color: #020617 !important; /* Dark text when tab is selected */
     }
 
     .kpi-card {
@@ -100,17 +100,12 @@ def generate_audit_data():
         df['AssignedCount'] = df['AssignedCount'].fillna(0).astype(int)
         df['UsedCount'] = df['UsedCount'].fillna(0).astype(int)
         
-        # --- THE SPECIFIC HEADTEACHER COMPLIANCE RULE ---
         def audit_logic(row):
             title = str(row['Job Title']).upper()
             count = row['AssignedCount']
             is_ht = "HEAD TEACHER" in title or "HEADTEACHER" in title
-            
-            # Non-compliance: More than expected (HT > 2, others > 1)
             excessive = (count > 2) if is_ht else (count > 1)
-            # Non-compliance: Less than expected (HT < 2, others == 0)
             missing = (count < 2) if is_ht else (count == 0)
-            
             return pd.Series([excessive, missing])
 
         df[['Flag_Excessive', 'Flag_Missing']] = df.apply(audit_logic, axis=1)
