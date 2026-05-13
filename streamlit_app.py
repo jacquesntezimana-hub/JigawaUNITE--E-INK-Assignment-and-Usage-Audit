@@ -4,7 +4,7 @@ import pandas as pd
 # 1. Page Configuration
 st.set_page_config(page_title="NewGlobe · JigawaUNITE", layout="wide")
 
-# Custom CSS
+# Custom CSS for NewGlobe Style
 st.markdown("""
     <style>
     [data-testid="stMetricValue"] { font-size: 30px; font-weight: bold; color: #1E3A8A; }
@@ -57,7 +57,7 @@ def generate_audit_data():
 
         df['Matches SnipeIT?'] = df.apply(check_match, axis=1)
 
-        # Prepare Metrics Dataframes
+        # Headteacher Exception Logic
         is_ht = df['Job Title'].str.contains('headteacher|head teacher', case=False, na=False)
         
         summary_vals = {
@@ -70,21 +70,28 @@ def generate_audit_data():
             "Multiple Devices": df[df['UsedCount'] > 1].copy()
         }
         
-        # Add the Comment Column to each escalation dataframe
-        for key in ["No Tablet", "More Than Allowed", "Not Using", "Assigned Others", "Multiple Devices"]:
-            summary_vals[key]["Admin Comments / Resolution"] = ""
+        # Initialize Comment Column for all lists
+        for key in summary_vals:
+            if isinstance(summary_vals[key], pd.DataFrame):
+                summary_vals[key]["Admin Comments / Resolution"] = ""
 
         return df, summary_vals
     except Exception as e:
         st.error(f"Analysis Error: {e}")
         return None, None
 
-# --- HEADER ---
+# --- HEADER SECTION ---
 h1, h2 = st.columns([1.5, 1])
 with h1:
     st.title("NewGlobe · JigawaUNITE")
 with h2:
-    view = st.segmented_control("Navigation", options=["📊 Summary", "📋 Breakdown", "🚨 Escalation"], selection_mode="single", default="📊 Summary", label_visibility="collapsed")
+    view = st.segmented_control(
+        "Navigation", 
+        options=["📊 Summary", "📋 Breakdown", "🚨 Escalation"], 
+        selection_mode="single", 
+        default="📊 Summary",
+        label_visibility="collapsed"
+    )
 
 st.write("---")
 
@@ -106,26 +113,28 @@ if data is not None:
         m5.metric("Staff logging into multiple devices", len(summary["Multiple Devices"]), f"{(len(summary['Multiple Devices'])/total_pop)*100:.1f}%")
 
     elif view == "📋 Breakdown":
-        st.subheader("Full Staff Audit List")
+        st.subheader("Detailed Audit List")
         st.dataframe(data, use_container_width=True, hide_index=True)
 
     elif view == "🚨 Escalation":
         st.header("🚨 Priority Escalation Action Lists")
-        st.info("💡 You can type directly into the 'Admin Comments' column to record notes.")
+        st.info("💡 Edit the 'Admin Comments' column below to record findings during follow-ups.")
         
-        common = ['EmployeeID', 'Employee Name', 'Job Title', 'Admin Comments / Resolution']
+        # Define common base columns
+        base_cols = ['EmployeeID', 'Employee Name', 'Current Academy Code', 'Job Title']
+        comment_col = ['Admin Comments / Resolution']
 
         with st.expander("1. Staff without assigned tablet", expanded=True):
-            st.data_editor(summary["No Tablet"][common], use_container_width=True, hide_index=True, key="ed1")
+            st.data_editor(summary["No Tablet"][base_cols + comment_col], use_container_width=True, hide_index=True, key="esc1")
 
         with st.expander("2. Staff assigned more tablets than allowed", expanded=True):
-            st.data_editor(summary["More Than Allowed"][common + ['AssignedCount']], use_container_width=True, hide_index=True, key="ed2")
+            st.data_editor(summary["More Than Allowed"][base_cols + ['AssignedCount'] + comment_col], use_container_width=True, hide_index=True, key="esc2")
 
         with st.expander("3. Staff assigned tablet but not using/log in it", expanded=True):
-            st.data_editor(summary["Not Using"][common + ['Tablet ID Assigned']], use_container_width=True, hide_index=True, key="ed3")
+            st.data_editor(summary["Not Using"][base_cols + ['Tablet ID Assigned'] + comment_col], use_container_width=True, hide_index=True, key="esc3")
 
         with st.expander("4. Staff using tablets assigned to others", expanded=True):
-            st.data_editor(summary["Assigned Others"][common + ['Tablet ID Assigned', 'Tablet ID Used']], use_container_width=True, hide_index=True, key="ed4")
+            st.data_editor(summary["Assigned Others"][base_cols + ['Tablet ID Assigned', 'Tablet ID Used'] + comment_col], use_container_width=True, hide_index=True, key="esc4")
 
         with st.expander("5. Staff logging into multiple devices", expanded=True):
-            st.data_editor(summary["Multiple Devices"][common + ['UsedCount']], use_container_width=True, hide_index=True, key="ed5")
+            st.data_editor(summary["Multiple Devices"][base_cols + ['UsedCount'] + comment_col], use_container_width=True, hide_index=True, key="esc5")
